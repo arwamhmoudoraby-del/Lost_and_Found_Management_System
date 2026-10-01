@@ -7,6 +7,269 @@
 #include "imgui_impl_dx11.h"
 #include <d3d11.h>
 
+
+#include <iostream>
+#include <string>
+#include <vector>
+
+using namespace std;
+
+
+// ============================================================
+//                    DOMAIN CLASSES
+// ============================================================
+
+// Person
+class Person {
+    // ...
+protected:
+
+    int id;
+    string username;
+    string passwordHash;
+
+public:
+    int getId();
+    string getuserName();
+    bool verifyPassword(string passwod);
+    virtual bool login(string username, string password) = 0;
+
+    virtual ~Person() = default;
+};
+
+// User
+class User : public Person {
+    // ...
+private:
+    string email;
+public:
+
+    bool registerAccount();
+    bool upadteProfile( const string& newUserName,const string& newEmail);
+    bool changePassword( const string& oldPassword ,const string& newpassword);
+    bool login(string userName , string password) override ;
+
+};
+
+
+// Admin
+class Admin : public Person {
+    // ...
+
+  public:
+        bool login(string username, string password) override ;
+        bool reviewClaim(int claimId, bool isApproved);
+        bool markItemAsReturned(int itemId);
+   
+
+};
+
+// Category
+class Category {
+    // ...
+private:
+
+    int id;
+    string name;
+public:
+
+    int getId();
+    string getName();
+
+
+
+};
+
+// Item
+class Item {
+    // ...
+protected:
+
+    int id;
+    Category category;
+    string color;
+    string location;
+    string date;
+    string imagePath;
+    string status;
+
+public:
+    virtual string getDetails() = 0;
+    string getStatus();
+
+
+};
+
+
+// LostReport
+class LostReport : public Item {
+    // ...
+private:
+
+    int userId;
+    string privateDescription;
+
+public:
+
+    bool saveToDb();
+    bool updateReport();
+    bool deleteReport();
+    string getPrivateDescription();
+    string getDetails() override ;
+
+
+};
+
+
+// FoundReport
+class FoundReport : public Item {
+    // ...
+private:
+
+    int adminId;
+    string publicDescription;
+    string privateNotes;
+
+public:
+    bool saveToDb();
+    bool updateReport();
+    string getPrivateNotes();
+    string getDetails() override ;
+
+
+
+};
+
+
+// PossibleMatch
+class PossibleMatch {
+    // ...
+
+private:
+
+    int id;
+    int lostReportId;
+    int foundReportId;
+    int matchScore;
+    string status; 
+
+public:
+
+    int getId();
+    int getMatchScore();
+
+
+};
+
+
+// ClaimRequest
+class ClaimRequest {
+    // ...
+private:
+
+    int id;
+    int userId;
+    int matchId;
+    string identifyingDetails;
+    string status;   
+    int reviewedByAdminId;
+    
+public:
+
+    bool submitClaim();
+    bool updateStatus(string newStatus);
+
+
+
+};
+
+// MatchingEngine
+class MatchingEngine {
+    // ...
+
+private:
+
+    int calculateScore( const LostReport& lost, const FoundReport& found);
+
+public:
+
+    void runMatchForLostReport( const LostReport& report);
+    void runMatchForFoundReport( const FoundReport& report);
+
+
+};
+
+// NotificationService
+class NotificationService {
+    // ...
+public:
+
+    bool sendNotification(int userid,  const string& msg , const string& type);  
+    vector<string> getUserNotifications (int userid); 
+    bool markAsRead(int notificationId);
+
+
+
+
+
+
+};
+
+// SearchService
+class SearchService {
+    // ...
+public:
+
+    vector<LostReport> searchLostReports(int categoryId, string color, string location);
+    vector<FoundReport> searchFoundReports(int categoryId, string color, string location);
+
+
+};
+
+// AdminDashboard
+class AdminDashboard {
+    // ...
+public:
+
+    int getTotalUsers();
+    int getTotalLostItems();
+    int getTotalFoundItems();
+    int getPendingClaimsCount();
+    int getApprovedClaimsCount();
+    int getReturnedItemsCount();
+
+
+};
+
+// Database
+class Database {
+    // TODO:
+
+private:
+    static Database* instance;
+    unique_ptr<pqxx::connection> connection;
+
+    Database() {
+
+        //coniction with postgresql
+
+    
+    };
+
+public:
+    static Database& getInstance();
+
+    pqxx::connection& getConnection();
+
+    pqxx::result executeQuery(string sql);
+
+    bool executeNonSelect(string sql);
+
+};
+
+
+
+
 // Forward declarations
 extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
@@ -25,12 +288,6 @@ LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
 
 //FUNCTIONS 
-
-
-
-
-
-
 
 
 int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LPWSTR lpCmdLine, _In_ int nCmdShow)
@@ -101,7 +358,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
             ///**************//
 
 
-
+            // Connect GUI actions with classes
 
 
         }
