@@ -155,8 +155,12 @@ private:
 
 public:
 
-    int getId();
-    int getMatchScore();
+    int getId(){
+        return id;
+    }
+    int getMatchScore(){
+        return matchScore;
+    }
 
 
 };
