@@ -1,6 +1,9 @@
 ﻿#include "framework.h"
 #include "Final Project.h"
 
+#include <pqxx/pqxx>
+#include "Database.h"
+
 // ImGui Headers
 #include "imgui.h"
 #include "imgui_impl_win32.h"
@@ -296,34 +299,6 @@ public:
 
 };
 
-// Database
-class Database {
-    // TODO:
-
-private:
-    static Database* instance;
-    unique_ptr<pqxx::connection> connection;
-
-    Database() {
-
-        //coniction with postgresql
-
-    
-    };
-
-public:
-    static Database& getInstance();
-
-    pqxx::connection& getConnection();
-
-    pqxx::result executeQuery(string sql);
-
-    bool executeNonSelect(string sql);
-
-};
-
-
-
 
 // Forward declarations
 extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
@@ -343,6 +318,10 @@ LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
 
 //FUNCTIONS 
+
+
+
+
 
 
 int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LPWSTR lpCmdLine, _In_ int nCmdShow)
