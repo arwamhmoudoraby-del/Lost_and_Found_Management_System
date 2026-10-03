@@ -199,19 +199,74 @@ public:
 
 };
 
+//Notification 
+class Notification {
+private:
+    int id;
+    int userId;
+    string message;
+    string type;
+    bool isRead;
+public:
+    Notification(int id,int userId,const string & message,const string & type,bool isRead)
+        :id(id),userId(userId),message(message),type(type),isRead(isRead){}
+public:
+    int getId()const {
+        return id;
+    }
+    int getUserId() const{
+        return userId;
+    }
+    string getMessage()const {
+        return message;
+    }
+    string getType() const {
+        return type;
+    }
+    bool getIsRead()const {
+        return isRead;
+    }
+};
+
 // NotificationService
 class NotificationService {
     // ...
 public:
 
-    bool sendNotification(int userid,  const string& msg , const string& type);  
-    vector<string> getUserNotifications (int userid); 
-    bool markAsRead(int notificationId);
+    bool sendNotification(int userid, const string& msg, const string& type) {
 
+        string query = "INSERT INTO notifications (user_id,message,type) VALUES ("
+            +to_string (userid)+",'"
+            + msg + "','"
+            + type + "');";
 
+        return Database::getInstance().executeNonSelect(query);
+    }
 
+    vector<Notification> getUserNotifications(int userid) {
 
+        vector<Notification> userNotifications;
 
+        string query = "SELECT id,User_id,message,type,is_read FROM notifications WHERE user_id=" + to_string(userid) + ";";
+        pqxx::result result = Database::getInstance().executeQuery(query);
+
+        for (const auto& row : result) {
+            int id = row["id"].as<int>();
+            int uid = row["user_id"].as<int>();
+            string msg = row["message"].as<string>();
+            string type = row["type"].as<string>();
+            bool isRead = row["is_read"].as<bool>();
+
+            Notification notify(id, uid, msg, type, isRead);
+            userNotifications.push_back(notify);
+        }
+        return userNotifications;
+    }
+
+    bool markAsRead(int notificationId) {
+        string query = "UPDATE notifications SET is_read=TRUE WHERE id=" + to_string(notificationId) + ";";
+        return Database::getInstance().executeNonSelect(query);
+    }
 
 };
 
