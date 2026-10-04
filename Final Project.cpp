@@ -158,8 +158,40 @@ private:
 
 public:
 
-    int getId();
-    int getMatchScore();
+     PossibleMatch(int lostId, int foundId, int score)
+        : id(0),
+          lostReportId(lostId),
+          foundReportId(foundId),
+          matchScore(score),
+          status("Possible")
+    {
+    }
+
+    int getId() const {
+        return id;
+    }
+
+    int getLostReportId() const {
+        return lostReportId;
+    }
+
+    int getFoundReportId() const {
+        return foundReportId;
+    }
+
+    int getMatchScore() const {
+        return matchScore;
+    }
+
+    string getStatus() const {
+        return status;
+    }
+
+    void setStatus(const string& newStatus) {
+        status = newStatus;
+    }
+
+    bool saveToDb();
 
 
 };
