@@ -176,13 +176,42 @@ private:
     string identifyingDetails;
     string status;   
     int reviewedByAdminId;
-    
+
 public:
 
-    bool submitClaim();
-    bool updateStatus(string newStatus);
+    ClaimRequest(int userId,int matchId,const string &identifyingDetails):
+        id(0),userId(userId),matchId(matchId),identifyingDetails(identifyingDetails),status("pending"),reviewedByAdminId(0){
+    }
 
+    ClaimRequest(int id, int userId, int matchId, const string& identifyingDetails, const string& status, int reviewedByAdminId)
+        : id(id), userId(userId), matchId(matchId), identifyingDetails(identifyingDetails), status(status), reviewedByAdminId(reviewedByAdminId) {
+    }
 
+    // Getters
+    int getId() const { return id; }
+    int getUserId() const { return userId; }
+    int getMatchId() const { return matchId; }
+    string getIdentifyingDetails() const { return identifyingDetails; }
+    string getStatus() const { return status; }
+    int getReviewedByAdminId() const { return reviewedByAdminId; }
+
+    bool submitClaim() {
+
+        string query = "INSERT INTO claim_requests (user_id, match_id, identifying_details, status) VALUES ("
+            + to_string(userId) + ", "
+            + to_string(matchId) + ", '"
+            + identifyingDetails + "', '"
+            + status + "');";
+
+        return Database::getInstance().executeNonSelect(query);
+    }
+
+    bool updateStatus(string newStatus) {
+
+        string query = "UPDATE claim_requests SET status = '" + newStatus + "' WHERE id = " + to_string(id) + ";";
+
+        return Database::getInstance().executeNonSelect(query);
+    }
 
 };
 

@@ -1,4 +1,4 @@
--- ============================================================
+ -- ============================================================
 -- Smart Lost & Found Management System
 -- Database Schema (PostgreSQL)
 -- ============================================================
@@ -119,12 +119,9 @@ CREATE TABLE claim_requests (
     id SERIAL PRIMARY KEY,
     user_id INT REFERENCES users(id) ON DELETE CASCADE,
     match_id INT REFERENCES possible_matches(id) ON DELETE CASCADE,
-    reason_why_mine TEXT,
     identifying_details TEXT,
-    ownership_proof VARCHAR(255),   -- optional (file path)
     status VARCHAR(20) DEFAULT 'pending', -- pending / approved / rejected / returned
     reviewed_by INT REFERENCES admins(id),
-    pickup_deadline DATE,
     returned_at TIMESTAMP,
     created_at TIMESTAMP DEFAULT NOW()
 );
