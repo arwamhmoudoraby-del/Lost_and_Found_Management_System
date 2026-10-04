@@ -3,7 +3,7 @@
 Database::Database()
 {
     conn = std::make_unique<pqxx::connection>(
-        "dbname=Lost&Found_System user=postgres password=YOUR_PASSWORD host=127.0.0.1 port=5432"
+        "dbname= Lost&Found_MS user=postgres password= 284pip  host=127.0.0.1 port=5432"
     );
 }
 

@@ -250,7 +250,7 @@ public:
 
         vector<Notification> userNotifications;
 
-        string query = "SELECT id,User_id,message,type,is_read FROM notifications WHERE user_id=" + to_string(userid) + ";";
+        string query = "SELECT id,user_id,message,type,is_read FROM notifications WHERE user_id=" + to_string(userid) + ";";
         pqxx::result result = Database::getInstance().executeQuery(query);
 
         for (const auto& row : result) {
@@ -289,12 +289,50 @@ class AdminDashboard {
     // ...
 public:
 
-    int getTotalUsers();
-    int getTotalLostItems();
-    int getTotalFoundItems();
-    int getPendingClaimsCount();
-    int getApprovedClaimsCount();
-    int getReturnedItemsCount();
+    int getTotalUsers() {
+
+        pqxx::result r = Database::getInstance().executeQuery("SELECT COUNT(*) FROM users");
+        return r[0][0].as<int>();
+        
+
+
+    }
+    int getTotalLostItems() {
+
+        pqxx::result r = Database::getInstance().executeQuery("SELECT COUNT(*) FROM lost_reports");
+        return r[0][0].as<int>();
+
+
+    }
+    int getTotalFoundItems() {
+
+        pqxx::result r = Database::getInstance().executeQuery("SELECT COUNT(*) FROM found_reports");
+        return r[0][0].as<int>();
+
+
+    }
+    int getPendingClaimsCount() {
+        pqxx::result r = Database::getInstance().executeQuery(
+            "SELECT COUNT(*) FROM claim_requests WHERE status = 'pending'"
+        );
+        return r[0][0].as<int>();
+
+    }
+    int getApprovedClaimsCount() {
+        pqxx::result r = Database::getInstance().executeQuery(
+            "SELECT COUNT(*) FROM claim_requests WHERE status = 'approved'"
+        );
+        return r[0][0].as<int>();
+
+    }
+    int getReturnedItemsCount() {
+
+        pqxx::result r = Database::getInstance().executeQuery(
+            "SELECT COUNT(*) FROM claim_requests WHERE status = 'returned'"
+        );
+        return r[0][0].as<int>();
+    }
+    
 
 
 };
@@ -317,9 +355,61 @@ LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
 
 
-//FUNCTIONS 
+// RENDER FUNCTIONS 
+
+void RenderNotificationsTab(int currentUserId)
+{
+    NotificationService notificationService;
+    vector<Notification> notifications = notificationService.getUserNotifications(currentUserId);
+
+    if (notifications.empty())
+    {
+        ImGui::Text("No notifications yet.");
+    }
+    else
+    {
+        for (auto& n : notifications)
+        {
+            ImGui::PushID(n.getId());
+
+            if (n.getIsRead())
+                ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.6f, 1.0f), "%s", n.getMessage().c_str());
+            else
+                ImGui::TextColored(ImVec4(1.0f, 1.0f, 0.3f, 1.0f), "%s", n.getMessage().c_str());
+
+            ImGui::SameLine();
+
+            if (!n.getIsRead())
+            {
+                if (ImGui::Button("Mark as read"))
+                {
+                    notificationService.markAsRead(n.getId());
+                }
+            }
+
+            ImGui::Separator();
+            ImGui::PopID();
+        }
+    }
+
+}
 
 
+
+void RenderDashboardTab()
+{
+    AdminDashboard dashboard;
+
+    ImGui::Separator();
+    ImGui::Text("Admin Dashboard");
+
+    ImGui ::Text("Total Users: %d", dashboard.getTotalUsers());
+    ImGui::Text("Total Lost Items: %d" ,dashboard.getTotalLostItems());
+    ImGui::Text("Total Found Items: %d" , dashboard.getTotalFoundItems());
+    ImGui::Text("Pending Claims: %d", dashboard.getPendingClaimsCount());
+    ImGui::Text("Approved Claims: %d", dashboard.getApprovedClaimsCount());
+    ImGui::Text("Returned Items: %d", dashboard.getReturnedItemsCount());
+}
 
 
 
@@ -359,8 +449,9 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
     ImGui_ImplDX11_Init(g_pd3dDevice, g_pd3dDeviceContext);
 
     // Main Loop
-    //////
-    ////
+   
+    int currentPage = 0;
+
     bool done = false;
     while (!done)
     {
@@ -380,6 +471,8 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
         ImGui_ImplWin32_NewFrame();
         ImGui::NewFrame();
 
+        //RENDR 
+       
         // --- Application Window UI ---
         ImGui::SetNextWindowSize(ImVec2(800, 600), ImGuiCond_FirstUseEver);
         ImGui::Begin("Dashboard");
@@ -387,15 +480,58 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
         ImGui::Text("Welcome to the System Dashboard!");
         ImGui::Separator();
 
-        if (ImGui::Button("Perform Action")) {
-            // Logic goes here
-            ///**************//
+        if (ImGui::Button("Lost Item"))
+        {
+            currentPage = 1;
+        }
+
+        if (ImGui::Button("Found Item"))
+        {
+            currentPage = 2;
+        }
+
+        if (ImGui::Button("Search"))
+        {
+            currentPage = 3;
+        }
+
+        if (ImGui::Button("Notifications"))
+        {
+            currentPage = 4;
+        }
+
+        // Dashboard
+        if (currentPage == 0)
+        {
+            RenderDashboardTab();
+        }
 
 
-            // Connect GUI actions with classes
+        if (currentPage == 1)
+        {
+            ImGui::Separator();
+            ImGui::Text("Lost Item Page");
+        }
 
+        if (currentPage == 2)
+        {
+            ImGui::Separator();  //line
+            ImGui::Text("Found Item Page");
+        }
+
+        if (currentPage == 3)
+        {
+            ImGui::Separator();
+            ImGui::Text("Search Page");
+        }
+
+        if (currentPage == 4)
+        {
+
+            RenderNotificationsTab(1);
 
         }
+
 
         ImGui::End();
 
