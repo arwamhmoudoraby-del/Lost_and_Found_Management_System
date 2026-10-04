@@ -96,6 +96,20 @@ protected:
     string imagePath;
     string status;
 
+    Item(int id, Category category, string color, string location, string date, string imagePath, string status) :
+        id(id),
+        category(category),
+        color(color),
+        location(location),
+        date(date),
+        imagePath(imagePath),
+        status(status)
+    {
+
+
+    }
+
+
 public:
     virtual string getDetails() = 0;
     string getStatus();
@@ -345,6 +359,15 @@ public:
 
 };
 
+
+vector<LostReport> SearchService::searchLostReports(int categoryId, string color, string location) {
+
+
+    vector<LostReport>  results;
+
+
+}
+
 // AdminDashboard
 class AdminDashboard {
     // ...
@@ -475,6 +498,30 @@ void RenderDashboardTab()
 
 
 
+
+void RenderClaimsTab()    ///////// in progress////////
+{
+    int claimId = 0;
+
+    ImGui::Separator();
+    ImGui::Text("Claim Review");
+
+    ImGui::InputInt("Claim ID", &claimId);
+
+    if (ImGui::Button("Approve"))
+    {
+        // approve claim
+    }
+
+    ImGui::SameLine();
+
+    if (ImGui::Button("Reject"))
+    {
+        // reject claim
+    }
+}
+
+
 int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LPWSTR lpCmdLine, _In_ int nCmdShow)
 {
     // 1. Create Application Window
@@ -509,9 +556,21 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
     ImGui_ImplWin32_Init(hwnd);
     ImGui_ImplDX11_Init(g_pd3dDevice, g_pd3dDeviceContext);
 
-    // Main Loop
+
+
+
+
+
+
+    // ***********Main Loop*************///
    
     int currentPage = 0;
+
+    int claimMatchId = 0;
+    char claimDetails[1000] = " ";
+    int currentUserId = 1;
+   
+    
 
     bool done = false;
     while (!done)
@@ -561,6 +620,12 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
             currentPage = 4;
         }
 
+        if (ImGui::Button("Claim Request"))
+        {
+            currentPage = 5;
+        }
+
+
         // Dashboard
         if (currentPage == 0)
         {
@@ -593,6 +658,38 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
 
         }
 
+        if (currentPage == 5)
+        {
+            ImGui::Separator();
+            ImGui::Text("Claim Request");
+
+            ImGui::InputInt("Match ID", &claimMatchId);
+
+            ImGui::InputTextMultiline(
+                "Identifying Details",
+                claimDetails,
+                IM_ARRAYSIZE(claimDetails),  //array size 1000
+                ImVec2(500, 120));  // // Width and height of the input box
+
+
+
+
+                if (ImGui::Button("Submit Claim")) {
+                    ClaimRequest claim(currentUserId, claimMatchId, string(claimDetails));
+
+                    claim.submitClaim();
+
+                }
+
+
+        }
+
+        if (currentPage == 6) {
+
+            RenderClaimsTab();
+        }
+
+        
 
         ImGui::End();
 
