@@ -69,23 +69,36 @@ class Admin : public Person {
 
 // Category
 class Category {
-    // ...
 private:
-
     int id;
     string name;
+
 public:
+    Category() : id(0), name("") {}
 
-    int getId();
-    string getName();
+    Category(int id, string name)
+        : id(id), name(name) {
+    }
 
+    int getId() {
+        return id;
+    }
 
+    string getName() {
+        return name;
+    }
 
+    void setId(int id) {
+        this->id = id;
+    }
+
+    void setName(string name) {
+        this->name = name;
+    }
 };
 
 // Item
 class Item {
-    // ...
 protected:
 
     int id;
@@ -96,8 +109,16 @@ protected:
     string imagePath;
     string status;
 
-    Item(int id, Category category, string color, string location, string date, string imagePath, string status) :
-        id(id),
+    Item(
+        int id,
+        Category category,
+        string color,
+        string location,
+        string date,
+        string imagePath,
+        string status
+    )
+        : id(id),
         category(category),
         color(color),
         location(location),
@@ -105,16 +126,65 @@ protected:
         imagePath(imagePath),
         status(status)
     {
-
-
     }
 
-
 public:
+
+    int getId() {
+        return id;
+    }
+
+    Category getCategory() {
+        return category;
+    }
+
+    string getColor() {
+        return color;
+    }
+
+    string getLocation() {
+        return location;
+    }
+
+    string getDate() {
+        return date;
+    }
+
+    string getImagePath() {
+        return imagePath;
+    }
+
+    string getStatus() {
+        return status;
+    }
+
+    void setCategory(Category category) {
+        this->category = category;
+    }
+
+    void setColor(string color) {
+        this->color = color;
+    }
+
+    void setLocation(string location) {
+        this->location = location;
+    }
+
+    void setDate(string date) {
+        this->date = date;
+    }
+
+    void setImagePath(string imagePath) {
+        this->imagePath = imagePath;
+    }
+
+    void setStatus(string status) {
+        this->status = status;
+    }
+
     virtual string getDetails() = 0;
-    string getStatus();
 
-
+    virtual ~Item() = default;
 };
 
 
