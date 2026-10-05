@@ -57,14 +57,224 @@ public:
 
 // Admin
 class Admin : public Person {
-    // ...
-
+ private :
+    string email;
+    vector<FoundReport> foundReports;
+    vector<Claim> claims;
+    int nextReportId;
   public:
-        bool login(string username, string password) override ;
-        bool reviewClaim(int claimId, bool isApproved);
-        bool markItemAsReturned(int itemId);
-   
+    // constructor
+  Admin(int id, string username, string password) : User(id, username, password)
+{
+    nextReportId = 1;
+}
+     // authentication 
+bool login(string username, string password) override
+{
+    
+    if (getUsername() == username &&
+        getPassword() == password)
+    {
+        cout << "Admin login successful.\n";
+        return true;
+    }
 
+    cout << "Invalid admin username or password.\n";
+    return false;
+}
+ // Found report Management
+bool createFoundReport(FoundReport report)
+{
+    report.setReportId(nextReportId);
+    report.setStatus("Found");
+
+    foundReports.push_back(report);
+
+    cout << "Found report created successfully.\n";
+    cout << "Report ID: " << nextReportId << endl;
+    nextReportId++;
+    return true;
+}
+bool editFoundReport(int reportId, FoundReport updatedReport)
+{
+    int index = findFoundReportIndex(reportId);
+    // Report does not exist
+    if (index == -1)
+    {
+        cout << "Found report not found.\n";
+        return false;
+    }
+    updatedReport.setReportId(reportId);
+
+    updatedReport.setStatus(foundReports[index].getStatus());
+
+    foundReports[index] = updatedReport;
+
+    cout << "Found report updated successfully.\n";
+    return true;
+}
+bool deleteFoundReport(int reportId)
+{
+    int index = findFoundReportIndex(reportId);
+    if (index == -1)
+    {
+        cout << "Found report not found.\n";
+        return false;
+    }
+    foundReports.erase(foundReports.begin() + index);
+    cout << "Found report deleted successfully.\n";
+    return true;
+}
+void viewAllFoundReports()
+{
+    if (foundReports.empty())
+    {
+        cout << "There are no found reports.\n";
+        return;
+    }
+    cout << "\n";
+    cout << "============================================\n";
+    cout << "           ALL FOUND REPORTS\n";
+    cout << "============================================\n";
+    for (const FoundReport& report : foundReports)
+    {
+        cout << "\n";
+        cout << "Report ID: "  << report.getReportId()  << endl;
+
+        cout << "Category: " << report.getCategory() << endl;
+
+        cout << "Color: " << report.getColor()  << endl;
+
+        cout << "Location Found: " << report.getLocation()  << endl;
+
+        cout << "Date Found: " << report.getDateFound() << endl;
+
+        cout << "Public Description: " << report.getPublicDescription() << endl;
+
+        cout << "Private Notes: " << report.getPrivateNotes() << endl;
+
+        cout << "Status: "    << report.getStatus()  << endl;
+        cout << "--------------------------------------------\n";
+    }
+}
+  // Claim Management
+void viewPendingClaims()
+{
+    bool foundPendingClaim = false;
+    cout << "\n";
+    cout << "============================================\n";
+    cout << "             PENDING CLAIMS\n";
+    cout << "============================================\n";
+    for (const Claim& claim : claims)
+    {
+        if (claim.getStatus() == "Pending")
+        {
+            foundPendingClaim = true;
+
+            cout << "\n";
+
+            cout << "Claim ID: " << claim.getClaimId() << endl;
+
+            cout << "User ID: " << claim.getUserId() << endl;
+
+            cout << "Found Report ID: "  << claim.getFoundReportId() << endl;
+
+            cout << "Reason: " << claim.getReason() << endl;
+
+            cout << "Identifying Details: " << claim.getIdentifyingDetails() << endl;
+
+            cout << "Ownership Proof: " << claim.getOwnershipProof() << endl;
+
+            cout << "Status: " << claim.getStatus() << endl;
+            cout << "--------------------------------------------\n";
+        }
+    }
+    if (!foundPendingClaim)
+    {
+        cout << "There are no pending claims.\n";
+    }
+}
+bool approveClaim(int claimId)
+{
+    int index = findClaimIndex(claimId);
+    // Claim doesn't exist
+    if (index == -1)
+    {
+        cout << "Claim not found.\n";
+        return false;
+    }
+    // We can only approve Pending claims
+    if (claims[index].getStatus() != "Pending")
+    {
+        cout << "This claim has already been processed.\n";
+        return false;
+    }
+    claims[index].setStatus("Approved");
+    cout << "Claim approved successfully.\n";
+    cout << "Notification: User can collect the item from the Security Office.\n";
+    return true;
+}
+bool rejectClaim(int claimId)
+{
+    int index = findClaimIndex(claimId);
+
+    if (index == -1)
+    {
+        cout << "Claim not found.\n";
+        return false;
+    }
+
+    // Only Pending claims can be rejected
+    if (claims[index].getStatus() != "Pending")
+    {
+        cout << "This claim has already been processed.\n";
+        return false;
+    }
+
+    
+    claims[index].setStatus("Rejected");
+
+    cout << "Claim rejected successfully.\n";
+
+ cout << "Notification: Your claim has been rejected.\n";
+    return true;
+}
+bool markAsReturned(int foundReportId)
+{
+    int reportIndex = findFoundReportIndex(foundReportId);
+
+    // Found report doesn't exist
+    if (reportIndex == -1)
+    {
+        cout << "Found report not found.\n";
+        return false;
+    }
+
+    bool approvedClaimExists = false;
+
+    for (const Claim& claim : claims)
+    {
+        if (claim.getFoundReportId() == foundReportId &&
+            claim.getStatus() == "Approved")
+        {
+            approvedClaimExists = true;
+            break;
+        }
+    }
+    if (!approvedClaimExists)
+    {
+        cout << "The item cannot be marked as returned.\n";
+        cout << "There is no approved claim for this item.\n";
+
+        return false;
+    }
+
+    foundReports[reportIndex].setStatus("Returned");
+
+    cout << "Item marked as returned successfully.\n";
+
+    return true;
+}     
 };
 
 // Category
