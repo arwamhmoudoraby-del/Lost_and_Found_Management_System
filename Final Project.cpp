@@ -312,6 +312,29 @@ private:
     string publicDescription;
     string privateNotes;
 
+
+public:
+    FoundReport(
+        int id,
+        int adminId,
+        Category category,
+        string color,
+        string location,
+        string date,
+        string publicDescription,
+        string privateNotes,
+        string imagePath,
+        string status
+    )
+        :Item(id, category, color, location, date, imagePath, status),
+        adminId(adminId),
+        publicDescription(publicDescription),
+        privateNotes(privateNotes)
+    {
+
+    }
+
+
 public:
     bool saveToDb();
     bool updateReport();
