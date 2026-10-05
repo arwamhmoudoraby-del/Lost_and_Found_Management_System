@@ -32,13 +32,32 @@ protected:
     string passwordHash;
 
 public:
-    int getId();
-    string getuserName();
-    bool verifyPassword(string passwod);
+    //default constructor
+    Person() :id(0), username(""), passwordHash("") {
+
+    }
+    //parameterized constructor
+    Person(int id, const string& username, const string& passwordHash)
+        :id(id), username(username), passwordHash(passwordHash) {
+
+    }
+
+    int getId() const {
+        return id;
+    }
+    string getuserName() const {
+        return username;
+    }
+    bool verifyPassword(const string & enteredPassword) const {
+        return passwordHash == enteredPassword;
+
+    }
     virtual bool login(string username, string password) = 0;
 
+    //destructor
     virtual ~Person() = default;
 };
+
 
 // User
 class User : public Person {
@@ -46,11 +65,85 @@ class User : public Person {
 private:
     string email;
 public:
+    //default constructor
+    User() :Person(), email(""){}
 
-    bool registerAccount();
-    bool upadteProfile( const string& newUserName,const string& newEmail);
-    bool changePassword( const string& oldPassword ,const string& newpassword);
-    bool login(string userName , string password) override ;
+    //parameterized constructor
+    User(int id, const string& username, const string& passwordHash,const string & email)
+        :Person(id,username,passwordHash),email(email){}
+
+
+    string getEmail()const {
+        return email;
+    }
+
+    bool registerAccount() {
+        string query = "INSERT INTO users (username , password_hash, email) VALUES ('"
+            + username + "','"
+            + passwordHash + "','"
+            + email + "');";
+
+        return Database::getInstance().executeNonSelect(query);
+
+    }
+
+    bool upadteProfile(const string& newUserName, const string& newEmail) {
+        string query = "UPDATE users SET username = '" + newUserName
+            + "', email = '" + newEmail
+            + "' WHERE id = " + to_string(id) + ";";
+
+        bool success = Database::getInstance().executeNonSelect(query);
+        
+        if (success) {
+            this->username = newUserName; //update current object
+            this->email = newEmail;
+        }
+        return success;
+    }
+
+    bool changePassword(const string& oldPassword, const string& newPassword) {
+
+        if (!verifyPassword(oldPassword)) {
+            return false;
+        }
+        string query = "UPDATE users SET password_hash = '" + newPassword
+            + "' WHERE id = " + to_string(id) + ";";
+
+        bool success = Database::getInstance().executeNonSelect(query);
+
+        if (success) {
+            this->passwordHash = newPassword; //update current object
+        }
+        return success;
+    }
+
+    bool login(string userName, string enteredPassword) override {
+
+        string query = "SELECT id, username, password_hash, email FROM users WHERE username = '"
+            + userName + "';";
+
+        pqxx::result result=Database::getInstance().executeQuery(query);
+
+        //check if username exists in database or not
+        if (result.empty()) {
+            return false;
+        }
+
+        auto row = result[0];
+        string storedPassword = row["password_hash"].as<string>();
+
+        //checks if the user entered his password correctly
+        if (storedPassword != enteredPassword) {
+            return false;
+        }
+
+        this->id = row["id"].as<int>();
+        this->username = row["username"].as<string>();
+        this->passwordHash = storedPassword;
+        this->email = row["email"].as<string>();
+
+        return true;
+    }
 
 };
 
@@ -253,12 +346,15 @@ public:
     }
 
     bool updateStatus(string newStatus) {
-
         string query = "UPDATE claim_requests SET status = '" + newStatus + "' WHERE id = " + to_string(id) + ";";
 
-        return Database::getInstance().executeNonSelect(query);
-    }
+        bool success = Database::getInstance().executeNonSelect(query);
 
+        if (success) {
+            this->status = newStatus; //update current object's status
+        }
+        return success;
+    }
 };
 
 // MatchingEngine
