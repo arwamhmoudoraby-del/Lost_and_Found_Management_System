@@ -128,12 +128,86 @@ private:
 
 public:
 
-    bool saveToDb();
-    bool updateReport();
-    bool deleteReport();
-    string getPrivateDescription();
-    string getDetails() override ;
+    bool saveToDb()
+    {
+        string query =
+        "INSERT INTO lost_reports "
+        "(user_id, category_id, color, location, date_lost, "
+        "private_description, image_path, status) "
+        "VALUES (" +
+        to_string(userId) +", "+
+        to_string(category.getId()) +", '"+
+        color+ "', '"+
+        location + "', '"+
+        date +"', '"+
+        privateDescription +"', '"+
+        imagePath +"', '"+
+        status + "')";
 
+        return Database::getInstance().executeNonSelect(query);
+    }
+
+    bool updateReport(int currentuser)
+    {
+        if(currentuser != userId || status == "Returned")
+        {
+            return false;
+        }
+        else 
+        {
+        string query =
+        "UPDATE lost_reports SET "
+        "category_id = " +to_string(category.getId()) + ", " +
+        "color = '"+color + "', " +
+        "location = '"+location+"', " +
+        "date_lost = '"+ date + "', " +
+        "private_description = '" + privateDescription + "', " +
+        "image_path = '"+imagePath + "', " +
+        "status = '"+status + "' "
+        "WHERE id = "+to_string(id);
+
+        return Database::getInstance().executeNonSelect(query);
+        }
+    }
+
+    bool deleteReport(int currentuser)
+    {
+        if(currentuser == userId)
+        {
+        string query =
+        "DELETE FROM lost_reports "
+        "WHERE id = " + to_string(id);
+
+        return Database::getInstance().executeNonSelect(query);
+        }
+        else
+        {
+            return false;
+        }
+    }
+
+    string getPrivateDescription()
+    {
+        return privateDescription;
+    }
+
+    string getDetails() override
+    {
+        string details =
+        "Category: "+category.getName()+"\n"+
+        "Color: "+color +"\n" +
+        "Location: "+location+"\n"+
+        "Date Lost: " +date + "\n"+
+        "Status: " +status + "\n"+
+        "Image: "+imagePath +"\n";
+
+        if (isAdmin)
+        {
+            details += "Private Description: " + privateDescription + "\n";
+        }
+
+        return details;
+    }
 
 };
 
