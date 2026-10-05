@@ -198,6 +198,27 @@ private:
 
 public:
 
+    LostReport(
+        int id,
+        int userId,
+        Category category,
+        string color,
+        string location,
+        string date,
+        string privateDescription,
+        string imagePath,
+        string status
+    )
+        :Item(id, category, color, location, date, imagePath, status),
+        userId(userId),
+        privateDescription(privateDescription) {
+
+    }
+    
+
+
+public:
+
     bool saveToDb()
     {
         string query =
@@ -508,8 +529,51 @@ vector<LostReport> SearchService::searchLostReports(int categoryId, string color
 
 
     vector<LostReport>  results;
+    string query =
+        "SELECT * FROM lost_reports "
+        "WHERE category_id = " + to_string(categoryId) +
+        " AND color = '" + color +
+        "' AND location = '" + location + "'";
+
+    pqxx::result r = Database::getInstance().executeQuery(query);
+
+    for (const auto& row : r) {
+        int id = row["id"].as<int>();
+        int userId = row["user_id"].as<int>();
+
+        int rowCategoryId = row["category_id"].as<int>();
+        string rowColor = row["color"].as<string>();
+        string rowLocation = row["location"].as<string>();
+
+        string date = row["date_lost"].as<string>();
+        string privateDescription = row["private_description"].as<string>();
+        string imagePath = row["image_path"].as<string>();
+        string status = row["status"].as<string>();
 
 
+        Category category(rowCategoryId, " ");
+
+
+        LostReport report(
+            id,
+            userId,
+            category,
+            rowColor,
+            rowLocation,
+            date,
+            privateDescription,
+            imagePath,
+            status
+        );
+
+        results.push_back(report);
+
+
+    }
+    return results;
+
+  
+    
 }
 
 // AdminDashboard
