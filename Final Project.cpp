@@ -65,15 +65,16 @@ private:
 public:
     Category() : id(0), name("") {}
 
+   
     Category(int id, string name)
         : id(id), name(name) {
     }
 
-    int getId() {
+    int getId() const {
         return id;
     }
 
-    string getName() {
+    string getName() const {
         return name;
     }
 
@@ -119,31 +120,31 @@ protected:
 
 public:
 
-    int getId() {
+    int getId() const {
         return id;
     }
 
-    Category getCategory() {
+    Category getCategory() const {
         return category;
     }
 
-    string getColor() {
+    string getColor() const {
         return color;
     }
 
-    string getLocation() {
+    string getLocation() const {
         return location;
     }
 
-    string getDate() {
+    string getDate() const {
         return date;
     }
 
-    string getImagePath() {
+    string getImagePath() const {
         return imagePath;
     }
 
-    string getStatus() {
+    string getStatus() const {
         return status;
     }
 
@@ -224,7 +225,15 @@ public:
         imagePath +"', '"+
         status + "')";
 
-        return Database::getInstance().executeNonSelect(query);
+       bool isSaved = Database::getInstance().executeNonSelect(query);
+
+      if (isSaved) {
+       
+        MatchingEngine engine;
+        engine.runMatchForLostReport(*this);
+      }
+
+    return isSaved;
     }
 
     bool updateReport(int currentuser)
@@ -329,6 +338,9 @@ public:
     bool updateReport();
     string getPrivateNotes();
     string getDetails() override ;
+    Category getCategory() const{
+        return category;
+    }
 
 
 
@@ -354,7 +366,7 @@ public:
           lostReportId(lostId),
           foundReportId(foundId),
           matchScore(score),
-          status("Possible")
+          status("Pending")
     {
     }
 
@@ -382,10 +394,20 @@ public:
         status = newStatus;
     }
 
-    bool saveToDb();
+    bool saveToDb() {
+    string query = "INSERT INTO possible_matches (lost_report_id, found_report_id, match_score, status) VALUES ("
+                 + to_string(lostReportId) + ", "
+                 + to_string(foundReportId) + ", "
+                 + to_string(matchScore) + ", '"
+                 + status + "');";
+
+    return Database::getInstance().executeNonSelect(query);
+}
 
 
 };
+
+
 
 
 // ClaimRequest
@@ -444,16 +466,107 @@ class MatchingEngine {
 
 private:
 
-    int calculateScore( const LostReport& lost, const FoundReport& found);
+   int calculateScore(const LostReport& lost, const FoundReport& found) {
+        int score = 0;
 
+        if (lost.getCategory().getName() == found.getCategory().getName()) {
+            score += 30;
+        }
+        if (!lost.getColor().empty() && lost.getColor() == found.getColor()) {
+            score += 20;
+        }
+        if (!lost.getLocation().empty() && lost.getLocation() == found.getLocation()) {
+            score += 25;
+        }
+        if (!lost.getDate().empty() && lost.getDate() == found.getDate()) {
+            score += 25;
+        }
+        return score;
+    }
 public:
 
-    void runMatchForLostReport( const LostReport& report);
-    void runMatchForFoundReport( const FoundReport& report);
+    void runMatchForLostReport( const LostReport& report){
+
+       
+        string query = "SELECT id, admin_id, category_id, color, location_found, date_found, "
+                           "public_description, private_notes, image_path, status "
+                           "FROM found_reports WHERE status = 'found';";
+
+        pqxx::result results = Database::getInstance().executeQuery(query);
+
+        for (const auto& row : results) {
+                int foundId = row["id"].as<int>();
+                int adminId = row["admin_id"].as<int>();
+                int categoryId = row["category_id"].as<int>();
+                string color = row["color"].as<string>();
+                string location = row["location_found"].as<string>();
+                string date = row["date_found"].as<string>();
+                string pubDesc = row["public_description"].as<string>();
+                string privNotes = row["private_notes"].as<string>();
+                string imgPath = row["image_path"].as<string>();
+                string status = row["status"].as<string>();
+
+                
+                Category cat(categoryId, "");
+                FoundReport found(foundId, adminId, cat, color, location, date, pubDesc, privNotes, imgPath, status);
+
+                int score = calculateScore(report, found);
+
+                if (score >= 70) {
+                    PossibleMatch match(report.getId(), found.getId(), score);
+                    if( match.saveToDb()){
+                        NotificationService notifService;
+                       string msg = "Match found for your lost report #" + to_string(report.getId()) + 
+                                    " (" + report.getCategory().getName() + ") with score " + to_string(score) + "%!";
+                        notifService.sendNotification(report.getUserId(), msg, "match_found");
+                   }
+                }
+        }
+    }
+
+
+    void runMatchForFoundReport( const FoundReport& report){
+
+        
+        string query = "SELECT id, user_id, category_id, color, location, date_lost, "
+                           "private_description, image_path, status "
+                           "FROM lost_reports WHERE status = 'lost';";
+
+        pqxx::result results = Database::getInstance().executeQuery(query);
+
+       for (const auto& row : results) {
+                int lostId = row["id"].as<int>();
+                int userId = row["user_id"].as<int>();
+                int categoryId = row["category_id"].as<int>();
+                string color = row["color"].as<string>();
+                string location = row["location"].as<string>();
+                string date = row["date_lost"].as<string>();
+                string privDesc = row["private_description"].as<string>();
+                string imgPath = row["image_path"].as<string>();
+                string status = row["status"].as<string>();
+
+                Category cat(categoryId, "");
+                LostReport lost(lostId, userId, cat, color, location, date, privDesc, imgPath, status);
+
+                int score = calculateScore(lost, report);
+
+                if (score >= 70) {
+                    PossibleMatch match(lost.getId(), report.getId(), score);
+                    if (match.saveToDb()) {
+                       
+                        NotificationService notifService;
+                       string msg = "Match found for your lost report #" + to_string(lost.getId()) + 
+                                    " (" + lost.getCategory().getName() + ") with score " + to_string(score) + "%!";
+
+                        notifService.sendNotification(userId, msg, "match_found");
+                    }
+                   
+                }
+         }
+    }
 
 
 };
-
 //Notification 
 class Notification {
 private:
