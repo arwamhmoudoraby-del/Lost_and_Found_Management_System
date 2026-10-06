@@ -55,17 +55,6 @@ public:
 };
 
 
-// Admin
-class Admin : public Person {
-    // ...
-
-  public:
-        bool login(string username, string password) override ;
-        bool reviewClaim(int claimId, bool isApproved);
-        bool markItemAsReturned(int itemId);
-   
-
-};
 
 // Category
 class Category {
@@ -534,6 +523,297 @@ public:
         return Database::getInstance().executeNonSelect(query);
     }
 
+};
+struct FoundReportRow {
+    int    id = 0;
+    string category, color, location, dateFound;
+    string publicDescription, privateNotes, imagePath, status;
+};
+
+struct ClaimRow {
+    int    claimId = 0, userId = 0, matchId = 0;
+    int    lostReportId = 0, foundReportId = 0, matchScore = 0;
+    string username;
+    string reasonWhyMine;          
+    string identifyingDetails;     
+    string ownershipProof;         
+    string pickupDeadline;         
+    string lostPrivateDescription;  
+    string foundPublicDescription;
+    string foundPrivateNotes;       
+    string status;
+};
+
+class Admin : public Person {
+private:
+    bool   loggedIn;
+    string lastMessage;                 // text the GUI can show after an action
+    NotificationService notifier;
+    MatchingEngine      matcher;
+
+    //  helpers 
+    static string esc(const string& s)  // escape single quotes (basic SQL-injection guard)
+    {
+        string out;
+        for (char c : s) { if (c == '\'') out += "''"; else out += c; }
+        return out;
+    }
+    static string lower(string s)
+    {
+        for (char& c : s) c = (char)tolower((unsigned char)c);
+        return s;
+    }
+    bool requireLogin()
+    {
+        if (!loggedIn) { lastMessage = "Admin must be logged in."; return false; }
+        return true;
+    }
+    struct ClaimContext {
+        int id = 0, userId = 0, matchId = 0, lostId = 0, foundId = 0;
+        string details, status;
+    };
+
+    bool loadClaim(int claimId, ClaimContext& ctx)
+    {
+        pqxx::result r = Database::getInstance().executeQuery(
+            "SELECT cr.id, cr.user_id, cr.match_id, cr.identifying_details, cr.status, "
+            "pm.lost_report_id, pm.found_report_id "
+            "FROM claim_requests cr "
+            "JOIN possible_matches pm ON pm.id = cr.match_id "
+            "WHERE cr.id = " + to_string(claimId));
+
+        if (r.empty()) { lastMessage = "Claim not found."; return false; }
+
+        ctx.id      = r[0]["id"].as<int>();
+        ctx.userId  = r[0]["user_id"].as<int>();
+        ctx.matchId = r[0]["match_id"].as<int>();
+        ctx.lostId  = r[0]["lost_report_id"].as<int>();
+        ctx.foundId = r[0]["found_report_id"].as<int>();
+        ctx.details = r[0]["identifying_details"].as<string>();
+        ctx.status  = lower(r[0]["status"].as<string>());
+        return true;
+    }
+    bool reviewClaim(int claimId, const string& newStatus, const string& matchStatus,
+                     const string& notifType, bool isApproval)
+    {
+        if (!requireLogin()) return false;
+
+        ClaimContext c;
+        if (!loadClaim(claimId, c)) return false;
+
+        if (c.status != "pending") {
+            lastMessage = "This claim has already been processed.";
+            return false;
+        }
+        ClaimRequest claim(c.id, c.userId, c.matchId, c.details, c.status, id);
+        if (!claim.updateStatus(newStatus)) {
+            lastMessage = "Database error while updating the claim.";
+            return false;
+        }
+        Database::getInstance().executeNonSelect(
+            "UPDATE claim_requests SET reviewed_by = " + to_string(id) +
+            (isApproval ? ", pickup_deadline = CURRENT_DATE + 7" : "") +
+            " WHERE id = " + to_string(c.id));
+        Database::getInstance().executeNonSelect(
+            "UPDATE possible_matches SET status = '" + matchStatus +
+            "' WHERE id = " + to_string(c.matchId));
+        string msg;
+        if (isApproval) {
+            pqxx::result d = Database::getInstance().executeQuery(
+                "SELECT to_char(pickup_deadline, 'DD/MM/YYYY') FROM claim_requests "
+                "WHERE id = " + to_string(c.id));
+            string deadline = d[0][0].as<string>();
+            msg = "Your claim has been approved. Please collect your item from the "
+                  "Security Office before " + deadline + ".";
+        } else {
+            msg = "Your claim has been rejected.";
+        }
+        notifier.sendNotification(c.userId, msg, notifType);
+
+        lastMessage = isApproval ? "Claim approved and user notified."
+                                 : "Claim rejected and user notified.";
+        return true;
+    }
+public:
+    //  constructor 
+    Admin() : loggedIn(false) { id = 0; }
+
+    string getLastMessage() const { return lastMessage; }
+    bool   isLoggedIn()     const { return loggedIn; }
+
+    //  Authentication 
+    bool login(string userName, string password) override
+    {
+        try {
+            pqxx::result r = Database::getInstance().executeQuery(
+                "SELECT id, username, password_hash FROM admins "
+                "WHERE username = '" + esc(userName) + "'");
+            if (r.empty()) { lastMessage = "Invalid admin username or password."; return false; }
+            id           = r[0]["id"].as<int>();
+            username     = r[0]["username"].as<string>();
+            passwordHash = r[0]["password_hash"].as<string>();
+            if (!verifyPassword(password)) {          // Person::verifyPassword
+                id = 0; username.clear(); passwordHash.clear();
+                lastMessage = "Invalid admin username or password.";
+                return false;
+            }
+        }
+        catch (const exception& e) { lastMessage = e.what(); return false; }
+        loggedIn = true;
+        lastMessage = "Admin login successful.";
+        return true;
+    }
+    void logout()
+    {
+        loggedIn = false;
+        id = 0; username.clear(); passwordHash.clear();
+        lastMessage = "Logged out.";
+    }
+    //  Found Report Management
+    bool createFoundReport(FoundReport& report)
+    {
+        if (!requireLogin()) return false;
+        report.setStatus("found");
+        if (!report.saveToDb()) { lastMessage = "Could not save the found report."; return false; }
+
+        matcher.runMatchForFoundReport(report);
+        lastMessage = "Found report created.";
+        return true;
+    }
+    bool editFoundReport(FoundReport& report)
+    {
+        if (!requireLogin()) return false;
+        pqxx::result r = Database::getInstance().executeQuery(
+            "SELECT status FROM found_reports WHERE id = " + to_string(report.getId()));
+        if (r.empty()) { lastMessage = "Found report not found."; return false; }
+        if (lower(r[0][0].as<string>()) == "returned") {
+            lastMessage = "A returned item can no longer be edited.";
+            return false;
+        }
+        if (!report.updateReport()) { lastMessage = "Could not update the found report."; return false; }
+        matcher.runMatchForFoundReport(report);   // details changed -> re-match
+        lastMessage = "Found report updated.";
+        return true;
+    }
+
+    bool deleteFoundReport(int reportId)
+    {
+        if (!requireLogin()) return false;
+
+        pqxx::result r = Database::getInstance().executeQuery(
+            "SELECT 1 FROM found_reports WHERE id = " + to_string(reportId));
+        if (r.empty()) { lastMessage = "Found report not found."; return false; }
+        pqxx::result c = Database::getInstance().executeQuery(
+            "SELECT 1 FROM claim_requests cr JOIN possible_matches pm ON pm.id = cr.match_id "
+            "WHERE pm.found_report_id = " + to_string(reportId) + " LIMIT 1");
+        if (!c.empty()) {
+            lastMessage = "This item has claims and cannot be deleted.";
+            return false;
+        }
+        bool ok = Database::getInstance().executeNonSelect(
+            "DELETE FROM found_reports WHERE id = " + to_string(reportId));
+        lastMessage = ok ? "Found report deleted." : "Database error while deleting.";
+        return ok;
+    }
+    vector<FoundReportRow> viewAllFoundReports()
+    {
+        vector<FoundReportRow> rows;
+        if (!requireLogin()) return rows;
+        pqxx::result r = Database::getInstance().executeQuery(
+            "SELECT f.id, COALESCE(c.name,'') AS category, f.color, f.location_found AS location, "
+            "f.date_found::text AS date_found, COALESCE(f.public_description,'') AS public_description, "
+            "COALESCE(f.private_notes,'') AS private_notes, COALESCE(f.image_path,'') AS image_path, "
+            "f.status FROM found_reports f LEFT JOIN categories c ON c.id = f.category_id "
+            "ORDER BY f.id DESC");
+        for (const auto& row : r) {
+            FoundReportRow f;
+            f.id                = row["id"].as<int>();
+            f.category          = row["category"].as<string>();
+            f.color             = row["color"].as<string>();
+            f.location          = row["location"].as<string>();
+            f.dateFound         = row["date_found"].as<string>();
+            f.publicDescription = row["public_description"].as<string>();
+            f.privateNotes      = row["private_notes"].as<string>();
+            f.imagePath         = row["image_path"].as<string>();
+            f.status            = row["status"].as<string>();
+            rows.push_back(f);
+        }
+        return rows;
+    }
+    //   Claim Management (Admin)
+    vector<ClaimRow> viewClaimsByStatus(const string& status)
+    {
+        vector<ClaimRow> rows;
+        if (!requireLogin()) return rows;
+        pqxx::result r = Database::getInstance().executeQuery(
+            "SELECT cr.id AS claim_id, cr.user_id, u.username, cr.match_id, "
+            "COALESCE(cr.reason_why_mine,'') AS reason, cr.identifying_details, "
+            "COALESCE(cr.ownership_proof,'') AS proof, COALESCE(cr.pickup_deadline::text,'') AS deadline, "
+            "cr.status, pm.lost_report_id, pm.found_report_id, "
+            "pm.match_score, COALESCE(lr.private_description,'') AS lost_private, "
+            "COALESCE(fr.public_description,'') AS found_public, "
+            "COALESCE(fr.private_notes,'') AS found_notes "
+            "FROM claim_requests cr "
+            "JOIN users u ON u.id = cr.user_id "
+            "JOIN possible_matches pm ON pm.id = cr.match_id "
+            "JOIN lost_reports lr ON lr.id = pm.lost_report_id "
+            "JOIN found_reports fr ON fr.id = pm.found_report_id "
+            "WHERE LOWER(cr.status) = '" + esc(lower(status)) + "' ORDER BY cr.id");
+        for (const auto& row : r) {
+            ClaimRow c;
+            c.claimId                = row["claim_id"].as<int>();
+            c.userId                 = row["user_id"].as<int>();
+            c.username               = row["username"].as<string>();
+            c.matchId                = row["match_id"].as<int>();
+            c.reasonWhyMine          = row["reason"].as<string>();
+            c.identifyingDetails     = row["identifying_details"].as<string>();
+            c.ownershipProof         = row["proof"].as<string>();
+            c.pickupDeadline         = row["deadline"].as<string>();
+            c.status                 = row["status"].as<string>();
+            c.lostReportId           = row["lost_report_id"].as<int>();
+            c.foundReportId          = row["found_report_id"].as<int>();
+            c.matchScore             = row["match_score"].as<int>();
+            c.lostPrivateDescription = row["lost_private"].as<string>();
+            c.foundPublicDescription = row["found_public"].as<string>();
+            c.foundPrivateNotes      = row["found_notes"].as<string>();
+            rows.push_back(c);
+        }
+        return rows;
+    }
+    vector<ClaimRow> viewPendingClaims()  { return viewClaimsByStatus("pending");  }
+    vector<ClaimRow> viewApprovedClaims() { return viewClaimsByStatus("approved"); }
+    bool approveClaim(int claimId)
+    {
+        return reviewClaim(claimId, "approved", "claimed", "claim_approved", true);
+    }
+    bool rejectClaim(int claimId)
+    {
+        return reviewClaim(claimId, "rejected", "notified", "claim_rejected", false);
+    }
+    // Admin clicks "Mark as Returned" after the owner collects the item
+    bool markAsReturned(int claimId)
+    {
+        if (!requireLogin()) return false;
+        ClaimContext c;
+        if (!loadClaim(claimId, c)) return false;
+        if (c.status != "approved") {
+            lastMessage = "Only an approved claim can be marked as returned.";
+            return false;
+        }
+        ClaimRequest claim(c.id, c.userId, c.matchId, c.details, c.status, id);
+        if (!claim.updateStatus("returned")) {
+            lastMessage = "Database error while updating the claim.";
+            return false;
+        }
+        Database::getInstance().executeNonSelect(
+            "UPDATE claim_requests SET returned_at = NOW() WHERE id = " + to_string(c.id));
+        Database::getInstance().executeNonSelect(
+            "UPDATE found_reports SET status = 'returned' WHERE id = " + to_string(c.foundId));
+        Database::getInstance().executeNonSelect(
+            "UPDATE lost_reports SET status = 'returned' WHERE id = " + to_string(c.lostId));
+        lastMessage = "Item marked as returned.";
+        return true;
+    }
 };
 
 // SearchService
