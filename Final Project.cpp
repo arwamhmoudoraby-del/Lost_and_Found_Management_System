@@ -929,6 +929,8 @@ public:
     }
 };
 
+
+
 // SearchService
 class SearchService {
     // ...
@@ -991,6 +993,59 @@ vector<LostReport> SearchService::searchLostReports(int categoryId, string color
   
     
 }
+
+
+vector<FoundReport>  SearchService::searchFoundReports(int categoryId, string color, string location) {
+
+    vector<FoundReport> results;
+
+    string query=
+        "SELECT * FROM found_reports "
+        "WHERE category_id = " + to_string(categoryId) +
+        " AND color = '" + color +
+        "' AND location_found = '" + location + "'";
+
+    pqxx::result r = Database::getInstance().executeQuery(query);
+
+    for (const auto& row : r) {
+
+        int id = row["id"].as<int>();
+        int adminId = row["admin_id"].as<int>();
+
+        int rowCategoryId = row["category_id"].as<int>();
+        string rowColor = row["color"].as<string>();
+        string rowLocation = row["location_found"].as<string>();
+
+        string date = row["date_found"].as<string>();
+        string publicDescription = row["public_description"].as<string>();
+        string privateNotes = row["private_notes"].as<string>();
+        string imagePath = row["image_path"].as<string>();
+        string status = row["status"].as<string>();
+
+        Category category(rowCategoryId, " ");
+
+        FoundReport report(
+            id,
+            adminId,
+            category,
+            rowColor,
+            rowLocation,
+            date,
+            publicDescription,
+            privateNotes,
+            imagePath,
+            status
+        );
+        results.push_back(report);
+
+    }
+    return results;
+
+
+
+}
+
+
 
 // AdminDashboard
 class AdminDashboard {
@@ -1190,9 +1245,19 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
    
     int currentPage = 0;
 
+    //claimRequest
+
     int claimMatchId = 0;
     char claimDetails[1000] = " ";
     int currentUserId = 1;
+
+
+    //SearchService
+    int searchCategoryId = 0;
+    char searchColor[100] = " ";
+    char searchLocation[100] = " ";
+    vector<LostReport> lostResults;
+    vector<FoundReport> foundResults;
    
     
 
@@ -1216,7 +1281,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
         ImGui::NewFrame();
 
         //RENDR 
-       
+
         // --- Application Window UI ---
         ImGui::SetNextWindowSize(ImVec2(800, 600), ImGuiCond_FirstUseEver);
         ImGui::Begin("Dashboard");
@@ -1234,12 +1299,12 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
             currentPage = 2;
         }
 
-        if (ImGui::Button("Search"))
+        if (ImGui::Button("Search"))   //DONE
         {
             currentPage = 3;
         }
 
-        if (ImGui::Button("Notifications"))
+        if (ImGui::Button("Notifications"))   //DONE
         {
             currentPage = 4;
         }
@@ -1272,8 +1337,39 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
         if (currentPage == 3)
         {
             ImGui::Separator();
-            ImGui::Text("Search Page");
+            ImGui::Text("Search");
+
+            ImGui::InputInt("Category ID", &searchCategoryId);
+
+            ImGui::InputText("Color ", searchColor, IM_ARRAYSIZE(searchColor));
+
+            ImGui::InputText("Location", searchLocation, IM_ARRAYSIZE(searchLocation));
+
+            if (ImGui::Button("search lost ")) {
+
+                SearchService  searchService;
+                lostResults = searchService.searchLostReports(
+
+                    searchCategoryId,
+                    string(searchColor),
+                    string(searchLocation)
+                );
+            }
+
+            if (ImGui::Button("search found ")) {
+
+                SearchService  searchService;
+                foundResults = searchService.searchFoundReports(
+
+                    searchCategoryId,
+                    string(searchColor),
+                    string(searchLocation)
+                );
+            }
+
+
         }
+    
 
         if (currentPage == 4)
         {
