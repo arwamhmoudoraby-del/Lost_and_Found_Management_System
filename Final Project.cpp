@@ -304,7 +304,6 @@ public:
 
 
 // FoundReport
-// FoundReport
 class FoundReport : public Item {
 private:
     int adminId;
