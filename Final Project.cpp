@@ -236,7 +236,15 @@ public:
         imagePath +"', '"+
         status + "')";
 
-        return Database::getInstance().executeNonSelect(query);
+       bool isSaved = Database::getInstance().executeNonSelect(query);
+
+      if (isSaved) {
+       
+        MatchingEngine engine;
+        engine.runMatchForLostReport(*this);
+      }
+
+    return isSaved;
     }
 
     bool updateReport(int currentuser)
@@ -519,7 +527,8 @@ public:
                     PossibleMatch match(report.getId(), found.getId(), score);
                     if( match.saveToDb()){
                         NotificationService notifService;
-                        string msg = "A potential match (Score: " + to_string(score) + "%) was found for your lost item!";
+                       string msg = "Match found for your lost report #" + to_string(report.getId()) + 
+                                    " (" + report.getCategory().getName() + ") with score " + to_string(score) + "%!";
                         notifService.sendNotification(report.getUserId(), msg, "match_found");
                    }
                 }
@@ -557,7 +566,9 @@ public:
                     if (match.saveToDb()) {
                        
                         NotificationService notifService;
-                        string msg = "A new found item matches your lost report with a score of " + to_string(score) + "%!";
+                       string msg = "Match found for your lost report #" + to_string(lost.getId()) + 
+                                    " (" + lost.getCategory().getName() + ") with score " + to_string(score) + "%!";
+
                         notifService.sendNotification(userId, msg, "match_found");
                     }
                    
