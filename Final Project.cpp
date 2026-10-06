@@ -74,7 +74,9 @@ private:
 public:
 
     int getId();
-    string getName();
+    string getName(){
+        return name;
+    }
 
 
 
@@ -97,6 +99,14 @@ public:
     virtual string getDetails() = 0;
     string getStatus();
 
+     Category getCategory() const {
+        return category;
+    }
+    
+
+    
+    
+
 
 };
 
@@ -116,6 +126,9 @@ public:
     bool deleteReport();
     string getPrivateDescription();
     string getDetails() override ;
+    Category getCategory()const{
+        return category;
+    }
 
 
 };
@@ -135,6 +148,9 @@ public:
     bool updateReport();
     string getPrivateNotes();
     string getDetails() override ;
+    Category getCategory() const{
+        return category;
+    }
 
 
 
@@ -160,7 +176,7 @@ public:
           lostReportId(lostId),
           foundReportId(foundId),
           matchScore(score),
-          status("Possible")
+          status("Pending")
     {
     }
 
@@ -188,7 +204,12 @@ public:
         status = newStatus;
     }
 
-    bool saveToDb();
+    bool saveToDb(){
+       string query="INSERT INTO possible_matches (lost_report_id, found_report_id, match_score, status) "
+        "VALUES ($1, $2, $3, $4);", lostReportId, foundReportId, matchScore, status;
+        
+        return Database::getInstance().executeNonSelect(query);
+    }
 
 
 };
@@ -221,11 +242,29 @@ class MatchingEngine {
 
 private:
 
-    int calculateScore( const LostReport& lost, const FoundReport& found);
+    int calculateScore( const LostReport& lost, const FoundReport& found){
+       int score=0;
+
+        if(lost.getCategory().getName()==found.getCategory().getName()){
+            score+=30;
+
+        }
+        if(lost.getColor()==found.getColor()){
+            score+=20;
+        }
+        if(lost.getLocation()==found.getLocation()){
+            score+=25;
+        }
+        if(lost.getDate()==found.getDate()){
+            score+=25;
+        }
+        return score;
+    }
 
 public:
 
-    void runMatchForLostReport( const LostReport& report);
+    void runMatchForLostReport( const LostReport& report){
+    }
     void runMatchForFoundReport( const FoundReport& report);
 
 
