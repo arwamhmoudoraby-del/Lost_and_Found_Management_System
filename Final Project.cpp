@@ -3,6 +3,7 @@
 
 #include <pqxx/pqxx>
 #include "Database.h"
+#include<iostream>
 
 // ImGui Headers
 #include "imgui.h"
@@ -59,7 +60,7 @@ public:
 };
 
 
-// User
+// User class
 class User : public Person {
     // ...
 private:
@@ -146,6 +147,8 @@ public:
     }
 
 };
+
+
 
 
 
@@ -271,6 +274,7 @@ public:
 };
 
 
+
 // LostReport
 class LostReport : public Item {
     // ...
@@ -297,13 +301,22 @@ public:
         privateDescription(privateDescription) {
 
     }
-    
+
+    int getUserId() const {
+        return userId;
+    }
+    string getPrivateDescription() const {
+        return privateDescription; 
+    }
 
 
 public:
 
     bool saveToDb()
     {
+
+      
+
         string query =
         "INSERT INTO lost_reports "
         "(user_id, category_id, color, location, date_lost, "
@@ -320,11 +333,7 @@ public:
 
        bool isSaved = Database::getInstance().executeNonSelect(query);
 
-      if (isSaved) {
-       
-        MatchingEngine engine;
-        engine.runMatchForLostReport(*this);
-      }
+     
 
     return isSaved;
     }
@@ -376,17 +385,12 @@ public:
     string getDetails() override
     {
         string details =
-        "Category: "+category.getName()+"\n"+
-        "Color: "+color +"\n" +
-        "Location: "+location+"\n"+
-        "Date Lost: " +date + "\n"+
-        "Status: " +status + "\n"+
-        "Image: "+imagePath +"\n";
-
-        if (isAdmin)
-        {
-            details += "Private Description: " + privateDescription + "\n";
-        }
+            "Category: " + category.getName() + "\n" +
+            "Color: " + color + "\n" +
+            "Location: " + location + "\n" +
+            "Date Lost: " + date + "\n" +
+            "Status: " + status + "\n" +
+            "Image: " + imagePath + "\n";
 
         return details;
     }
@@ -430,7 +434,9 @@ public:
     bool saveToDb();
     bool updateReport();
     string getPrivateNotes();
-    string getDetails() override ;
+    string getDetails() override {
+          
+    }
     Category getCategory() const{
         return category;
     }
@@ -556,113 +562,7 @@ public:
     }
 };
 
-// MatchingEngine
-class MatchingEngine {
-    // ...
 
-private:
-
-   int calculateScore(const LostReport& lost, const FoundReport& found) {
-        int score = 0;
-
-        if (lost.getCategory().getName() == found.getCategory().getName()) {
-            score += 30;
-        }
-        if (!lost.getColor().empty() && lost.getColor() == found.getColor()) {
-            score += 20;
-        }
-        if (!lost.getLocation().empty() && lost.getLocation() == found.getLocation()) {
-            score += 25;
-        }
-        if (!lost.getDate().empty() && lost.getDate() == found.getDate()) {
-            score += 25;
-        }
-        return score;
-    }
-public:
-
-    void runMatchForLostReport( const LostReport& report){
-
-       
-        string query = "SELECT id, admin_id, category_id, color, location_found, date_found, "
-                           "public_description, private_notes, image_path, status "
-                           "FROM found_reports WHERE status = 'found';";
-
-        pqxx::result results = Database::getInstance().executeQuery(query);
-
-        for (const auto& row : results) {
-                int foundId = row["id"].as<int>();
-                int adminId = row["admin_id"].as<int>();
-                int categoryId = row["category_id"].as<int>();
-                string color = row["color"].as<string>();
-                string location = row["location_found"].as<string>();
-                string date = row["date_found"].as<string>();
-                string pubDesc = row["public_description"].as<string>();
-                string privNotes = row["private_notes"].as<string>();
-                string imgPath = row["image_path"].as<string>();
-                string status = row["status"].as<string>();
-
-                
-                Category cat(categoryId, "");
-                FoundReport found(foundId, adminId, cat, color, location, date, pubDesc, privNotes, imgPath, status);
-
-                int score = calculateScore(report, found);
-
-                if (score >= 70) {
-                    PossibleMatch match(report.getId(), found.getId(), score);
-                    if( match.saveToDb()){
-                        NotificationService notifService;
-                       string msg = "Match found for your lost report #" + to_string(report.getId()) + 
-                                    " (" + report.getCategory().getName() + ") with score " + to_string(score) + "%!";
-                        notifService.sendNotification(report.getUserId(), msg, "match_found");
-                   }
-                }
-        }
-    }
-
-
-    void runMatchForFoundReport( const FoundReport& report){
-
-        
-        string query = "SELECT id, user_id, category_id, color, location, date_lost, "
-                           "private_description, image_path, status "
-                           "FROM lost_reports WHERE status = 'lost';";
-
-        pqxx::result results = Database::getInstance().executeQuery(query);
-
-       for (const auto& row : results) {
-                int lostId = row["id"].as<int>();
-                int userId = row["user_id"].as<int>();
-                int categoryId = row["category_id"].as<int>();
-                string color = row["color"].as<string>();
-                string location = row["location"].as<string>();
-                string date = row["date_lost"].as<string>();
-                string privDesc = row["private_description"].as<string>();
-                string imgPath = row["image_path"].as<string>();
-                string status = row["status"].as<string>();
-
-                Category cat(categoryId, "");
-                LostReport lost(lostId, userId, cat, color, location, date, privDesc, imgPath, status);
-
-                int score = calculateScore(lost, report);
-
-                if (score >= 70) {
-                    PossibleMatch match(lost.getId(), report.getId(), score);
-                    if (match.saveToDb()) {
-                       
-                        NotificationService notifService;
-                       string msg = "Match found for your lost report #" + to_string(lost.getId()) + 
-                                    " (" + lost.getCategory().getName() + ") with score " + to_string(score) + "%!";
-
-                        notifService.sendNotification(userId, msg, "match_found");
-                    }
-                   
-                }
-         }
-    }
-
-
-};
 //Notification 
 class Notification {
 private:
@@ -700,7 +600,7 @@ public:
     bool sendNotification(int userid, const string& msg, const string& type) {
 
         string query = "INSERT INTO notifications (user_id,message,type) VALUES ("
-            +to_string (userid)+",'"
+            + to_string(userid) + ",'"
             + msg + "','"
             + type + "');";
 
@@ -733,6 +633,120 @@ public:
     }
 
 };
+
+
+
+// MatchingEngine
+class MatchingEngine {
+    // ...
+
+private:
+
+    int calculateScore(const LostReport& lost, const FoundReport& found) {
+        int score = 0;
+
+        if (lost.getCategory().getName() == found.getCategory().getName()) {
+            score += 30;
+        }
+        if (!lost.getColor().empty() && lost.getColor() == found.getColor()) {
+            score += 20;
+        }
+        if (!lost.getLocation().empty() && lost.getLocation() == found.getLocation()) {
+            score += 25;
+        }
+        if (!lost.getDate().empty() && lost.getDate() == found.getDate()) {
+            score += 25;
+        }
+        return score;
+    }
+public:
+
+    void runMatchForLostReport(const LostReport& report) {
+
+
+        string query = "SELECT id, admin_id, category_id, color, location_found, date_found, "
+            "public_description, private_notes, image_path, status "
+            "FROM found_reports WHERE status = 'found';";
+
+        pqxx::result results = Database::getInstance().executeQuery(query);
+
+        for (const auto& row : results) {
+            int foundId = row["id"].as<int>();
+            int adminId = row["admin_id"].as<int>();
+            int categoryId = row["category_id"].as<int>();
+            string color = row["color"].as<string>();
+            string location = row["location_found"].as<string>();
+            string date = row["date_found"].as<string>();
+            string pubDesc = row["public_description"].as<string>();
+            string privNotes = row["private_notes"].as<string>();
+            string imgPath = row["image_path"].as<string>();
+            string status = row["status"].as<string>();
+
+
+            Category cat(categoryId, "");
+            FoundReport found(foundId, adminId, cat, color, location, date, pubDesc, privNotes, imgPath, status);
+
+            int score = calculateScore(report, found);
+
+            if (score >= 70) {
+                PossibleMatch match(report.getId(), found.getId(), score);
+                if (match.saveToDb()) {
+                    NotificationService notifService;
+                    string msg = "Match found for your lost report #" + to_string(report.getId()) +
+                        " (" + report.getCategory().getName() + ") with score " + to_string(score) + "%!";
+                    notifService.sendNotification(report.getUserId(), msg, "match_found");
+                }
+            }
+        }
+    }
+
+
+    void runMatchForFoundReport(const FoundReport& report) {
+
+
+        string query = "SELECT id, user_id, category_id, color, location, date_lost, "
+            "private_description, image_path, status "
+            "FROM lost_reports WHERE status = 'lost';";
+
+        pqxx::result results = Database::getInstance().executeQuery(query);
+
+        for (const auto& row : results) {
+            int lostId = row["id"].as<int>();
+            int userId = row["user_id"].as<int>();
+            int categoryId = row["category_id"].as<int>();
+            string color = row["color"].as<string>();
+            string location = row["location"].as<string>();
+            string date = row["date_lost"].as<string>();
+            string privDesc = row["private_description"].as<string>();
+            string imgPath = row["image_path"].as<string>();
+            string status = row["status"].as<string>();
+
+            Category cat(categoryId, "");
+            LostReport lost(lostId, userId, cat, color, location, date, privDesc, imgPath, status);
+
+            int score = calculateScore(lost, report);
+
+            if (score >= 70) {
+                PossibleMatch match(lost.getId(), report.getId(), score);
+                if (match.saveToDb()) {
+
+                    NotificationService notifService;
+                    string msg = "Match found for your lost report #" + to_string(lost.getId()) +
+                        " (" + lost.getCategory().getName() + ") with score " + to_string(score) + "%!";
+
+                    notifService.sendNotification(userId, msg, "match_found");
+                }
+
+            }
+        }
+    }
+
+
+};
+
+
+
+////***Admin ****/////
 struct FoundReportRow {
     int    id = 0;
     string category, color, location, dateFound;
@@ -743,16 +757,15 @@ struct ClaimRow {
     int    claimId = 0, userId = 0, matchId = 0;
     int    lostReportId = 0, foundReportId = 0, matchScore = 0;
     string username;
-    string reasonWhyMine;          
-    string identifyingDetails;     
-    string ownershipProof;         
-    string pickupDeadline;         
-    string lostPrivateDescription;  
+    string identifyingDetails;
+    string lostPrivateDescription;
     string foundPublicDescription;
-    string foundPrivateNotes;       
+    string foundPrivateNotes;
     string status;
 };
 
+
+//Admin class
 class Admin : public Person {
 private:
     bool   loggedIn;
@@ -793,17 +806,17 @@ private:
 
         if (r.empty()) { lastMessage = "Claim not found."; return false; }
 
-        ctx.id      = r[0]["id"].as<int>();
-        ctx.userId  = r[0]["user_id"].as<int>();
+        ctx.id = r[0]["id"].as<int>();
+        ctx.userId = r[0]["user_id"].as<int>();
         ctx.matchId = r[0]["match_id"].as<int>();
-        ctx.lostId  = r[0]["lost_report_id"].as<int>();
+        ctx.lostId = r[0]["lost_report_id"].as<int>();
         ctx.foundId = r[0]["found_report_id"].as<int>();
         ctx.details = r[0]["identifying_details"].as<string>();
-        ctx.status  = lower(r[0]["status"].as<string>());
+        ctx.status = lower(r[0]["status"].as<string>());
         return true;
     }
     bool reviewClaim(int claimId, const string& newStatus, const string& matchStatus,
-                     const string& notifType, bool isApproval)
+        const string& notifType, bool isApproval)
     {
         if (!requireLogin()) return false;
 
@@ -821,26 +834,23 @@ private:
         }
         Database::getInstance().executeNonSelect(
             "UPDATE claim_requests SET reviewed_by = " + to_string(id) +
-            (isApproval ? ", pickup_deadline = CURRENT_DATE + 7" : "") +
             " WHERE id = " + to_string(c.id));
+
         Database::getInstance().executeNonSelect(
             "UPDATE possible_matches SET status = '" + matchStatus +
             "' WHERE id = " + to_string(c.matchId));
         string msg;
         if (isApproval) {
-            pqxx::result d = Database::getInstance().executeQuery(
-                "SELECT to_char(pickup_deadline, 'DD/MM/YYYY') FROM claim_requests "
-                "WHERE id = " + to_string(c.id));
-            string deadline = d[0][0].as<string>();
-            msg = "Your claim has been approved. Please collect your item from the "
-                  "Security Office before " + deadline + ".";
-        } else {
+            msg = "Your claim has been approved.";
+
+        }
+        else {
             msg = "Your claim has been rejected.";
         }
         notifier.sendNotification(c.userId, msg, notifType);
 
         lastMessage = isApproval ? "Claim approved and user notified."
-                                 : "Claim rejected and user notified.";
+            : "Claim rejected and user notified.";
         return true;
     }
 public:
@@ -858,8 +868,8 @@ public:
                 "SELECT id, username, password_hash FROM admins "
                 "WHERE username = '" + esc(userName) + "'");
             if (r.empty()) { lastMessage = "Invalid admin username or password."; return false; }
-            id           = r[0]["id"].as<int>();
-            username     = r[0]["username"].as<string>();
+            id = r[0]["id"].as<int>();
+            username = r[0]["username"].as<string>();
             passwordHash = r[0]["password_hash"].as<string>();
             if (!verifyPassword(password)) {          // Person::verifyPassword
                 id = 0; username.clear(); passwordHash.clear();
@@ -936,15 +946,15 @@ public:
             "ORDER BY f.id DESC");
         for (const auto& row : r) {
             FoundReportRow f;
-            f.id                = row["id"].as<int>();
-            f.category          = row["category"].as<string>();
-            f.color             = row["color"].as<string>();
-            f.location          = row["location"].as<string>();
-            f.dateFound         = row["date_found"].as<string>();
+            f.id = row["id"].as<int>();
+            f.category = row["category"].as<string>();
+            f.color = row["color"].as<string>();
+            f.location = row["location"].as<string>();
+            f.dateFound = row["date_found"].as<string>();
             f.publicDescription = row["public_description"].as<string>();
-            f.privateNotes      = row["private_notes"].as<string>();
-            f.imagePath         = row["image_path"].as<string>();
-            f.status            = row["status"].as<string>();
+            f.privateNotes = row["private_notes"].as<string>();
+            f.imagePath = row["image_path"].as<string>();
+            f.status = row["status"].as<string>();
             rows.push_back(f);
         }
         return rows;
@@ -956,9 +966,7 @@ public:
         if (!requireLogin()) return rows;
         pqxx::result r = Database::getInstance().executeQuery(
             "SELECT cr.id AS claim_id, cr.user_id, u.username, cr.match_id, "
-            "COALESCE(cr.reason_why_mine,'') AS reason, cr.identifying_details, "
-            "COALESCE(cr.ownership_proof,'') AS proof, COALESCE(cr.pickup_deadline::text,'') AS deadline, "
-            "cr.status, pm.lost_report_id, pm.found_report_id, "
+            " cr.identifying_details ,cr.status, pm.lost_report_id, pm.found_report_id, "
             "pm.match_score, COALESCE(lr.private_description,'') AS lost_private, "
             "COALESCE(fr.public_description,'') AS found_public, "
             "COALESCE(fr.private_notes,'') AS found_notes "
@@ -970,26 +978,25 @@ public:
             "WHERE LOWER(cr.status) = '" + esc(lower(status)) + "' ORDER BY cr.id");
         for (const auto& row : r) {
             ClaimRow c;
-            c.claimId                = row["claim_id"].as<int>();
-            c.userId                 = row["user_id"].as<int>();
-            c.username               = row["username"].as<string>();
-            c.matchId                = row["match_id"].as<int>();
-            c.reasonWhyMine          = row["reason"].as<string>();
-            c.identifyingDetails     = row["identifying_details"].as<string>();
-            c.ownershipProof         = row["proof"].as<string>();
-            c.pickupDeadline         = row["deadline"].as<string>();
-            c.status                 = row["status"].as<string>();
-            c.lostReportId           = row["lost_report_id"].as<int>();
-            c.foundReportId          = row["found_report_id"].as<int>();
-            c.matchScore             = row["match_score"].as<int>();
+            c.claimId = row["claim_id"].as<int>();
+            c.userId = row["user_id"].as<int>();
+            c.username = row["username"].as<string>();
+            c.matchId = row["match_id"].as<int>();
+
+            c.identifyingDetails = row["identifying_details"].as<string>();
+
+            c.status = row["status"].as<string>();
+            c.lostReportId = row["lost_report_id"].as<int>();
+            c.foundReportId = row["found_report_id"].as<int>();
+            c.matchScore = row["match_score"].as<int>();
             c.lostPrivateDescription = row["lost_private"].as<string>();
             c.foundPublicDescription = row["found_public"].as<string>();
-            c.foundPrivateNotes      = row["found_notes"].as<string>();
+            c.foundPrivateNotes = row["found_notes"].as<string>();
             rows.push_back(c);
         }
         return rows;
     }
-    vector<ClaimRow> viewPendingClaims()  { return viewClaimsByStatus("pending");  }
+    vector<ClaimRow> viewPendingClaims() { return viewClaimsByStatus("pending"); }
     vector<ClaimRow> viewApprovedClaims() { return viewClaimsByStatus("approved"); }
     bool approveClaim(int claimId)
     {
@@ -1297,8 +1304,16 @@ void RenderClaimsTab()    ///////// in progress////////
 }
 
 
+
+
+/////*******MAIN*******///////////
+
 int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LPWSTR lpCmdLine, _In_ int nCmdShow)
 {
+  
+    
+
+    
     // 1. Create Application Window
     WNDCLASSEXW wc = { sizeof(wc), CS_CLASSDC, WndProc, 0L, 0L, GetModuleHandle(nullptr), nullptr, nullptr, nullptr, nullptr, L"ImGui Class", nullptr };
     ::RegisterClassExW(&wc);
@@ -1421,8 +1436,52 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
         if (currentPage == 1)
         {
             ImGui::Separator();
-            ImGui::Text("Lost Item Page");
+            ImGui::Text("Report a Lost Item");
+
+            static int lostCategoryId = 0;
+            static char lostColor[100] = "";
+            static char lostLocation[100] = "";
+            static char lostDate[20] = "";
+            static char lostPrivateDesc[500] = "";
+            static char lostImagePath[200] = "";
+
+            ImGui::InputInt("Category ID", &lostCategoryId);
+            ImGui::InputText("Color", lostColor, IM_ARRAYSIZE(lostColor));
+            ImGui::InputText("Location", lostLocation, IM_ARRAYSIZE(lostLocation));
+            ImGui::InputText("Date (YYYY-MM-DD)", lostDate, IM_ARRAYSIZE(lostDate));
+            ImGui::InputTextMultiline("Private Description", lostPrivateDesc, IM_ARRAYSIZE(lostPrivateDesc));
+            ImGui::InputText("Image Path (optional)", lostImagePath, IM_ARRAYSIZE(lostImagePath));
+
+
+            if (ImGui::Button("Submit Lost Report"))
+            {
+                Category category(lostCategoryId, "");
+                LostReport report(
+                    0,                 
+                    currentUserId,          
+                    category,
+                    string(lostColor),
+                    string(lostLocation),
+                    string(lostDate),
+                    string(lostPrivateDesc),
+                    string(lostImagePath),
+                    "lost"                  // status
+                );
+
+                if (report.saveToDb())
+                {
+                    MatchingEngine engine;             
+                    engine.runMatchForLostReport(report);
+
+                    ImGui::Text("Report saved successfully!");
+                }
+                else
+                {
+                    ImGui::Text("Failed to save report.");
+                }
+            }
         }
+    
 
         if (currentPage == 2)
         {

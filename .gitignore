@@ -17,3 +17,4 @@ obj/
 *.idb
 vcpkg_installed/
 .vscode/
+db_config.txt
