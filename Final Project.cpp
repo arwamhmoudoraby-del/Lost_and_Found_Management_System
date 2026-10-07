@@ -400,15 +400,21 @@ public:
 
 // FoundReport
 class FoundReport : public Item {
-    // ...
 private:
-
     int adminId;
     string publicDescription;
     string privateNotes;
 
-
 public:
+    // Default Constructor
+    FoundReport()
+        : Item(0, Category(), "", "", "", "", "Found"),
+        adminId(0),
+        publicDescription(""),
+        privateNotes("") {
+    }
+
+    // Main Constructor
     FoundReport(
         int id,
         int adminId,
@@ -421,15 +427,45 @@ public:
         string imagePath,
         string status
     )
-        :Item(id, category, color, location, date, imagePath, status),
+        : Item(id, category, color, location, date, imagePath, status),
         adminId(adminId),
         publicDescription(publicDescription),
         privateNotes(privateNotes)
     {
-
     }
 
+    // Getters and Setters
+    int getAdminId() const { return adminId; }
+    void setAdminId(int id) { adminId = id; }
 
+    string getPublicDescription() const { return publicDescription; }
+    void setPublicDescription(const string& desc) { publicDescription = desc; }
+
+    string getPrivateNotes() const { return privateNotes; }
+    void setPrivateNotes(const string& notes) { privateNotes = notes; }
+
+    // Overridden getDetails from Item
+    string getDetails() override {
+        return getDetails(false);
+    }
+
+    // Overloaded getDetails with Admin visibility check
+    string getDetails(bool isAdmin) {
+        string details =
+            "Found Report ID: " + to_string(id) + "\n" +
+            "Category: " + category.getName() + "\n" +
+            "Color: " + color + "\n" +
+            "Location: " + location + "\n" +
+            "Date Found: " + date + "\n" +
+            "Public Description: " + publicDescription + "\n" +
+            "Status: " + status + "\n" +
+            "Image: " + imagePath + "\n";
+
+        if (isAdmin) {
+            details += "Private Notes: " + privateNotes + "\n";
+        }
+
+        return details;
 public:
     bool saveToDb();
     bool updateReport();
@@ -441,10 +477,92 @@ public:
         return category;
     }
 
+    // Database Methods
+    bool saveToDb() {
+        string query =
+            "INSERT INTO found_reports "
+            "(admin_id, category_id, color, location, date_found, "
+            "public_description, private_notes, image_path, status) "
+            "VALUES (" +
+            to_string(adminId) + ", " +
+            to_string(category.getId()) + ", '" +
+            color + "', '" +
+            location + "', '" +
+            date + "', '" +
+            publicDescription + "', '" +
+            privateNotes + "', '" +
+            imagePath + "', '" +
+            status + "')";
 
+        return Database::getInstance().executeNonSelect(query);
+    }
 
+    bool updateReport(int currentAdminId) {
+        if (currentAdminId != adminId || status == "Returned") {
+            return false;
+        }
+
+        string query =
+            "UPDATE found_reports SET "
+            "category_id = " + to_string(category.getId()) + ", " +
+            "color = '" + color + "', " +
+            "location = '" + location + "', " +
+            "date_found = '" + date + "', " +
+            "public_description = '" + publicDescription + "', " +
+            "private_notes = '" + privateNotes + "', " +
+            "image_path = '" + imagePath + "', " +
+            "status = '" + status + "' " +
+            "WHERE id = " + to_string(id);
+
+        return Database::getInstance().executeNonSelect(query);
+    }
+
+    bool deleteReport(int currentAdminId) {
+        if (currentAdminId != adminId) {
+            return false;
+        }
+
+        string query = "DELETE FROM found_reports WHERE id = " + to_string(id);
+        return Database::getInstance().executeNonSelect(query);
+    }
+
+    // Static Fetch Helper
+    static vector<FoundReport> getAllReports() {
+        vector<FoundReport> reports;
+        string query =
+            "SELECT fr.id, fr.admin_id, fr.category_id, c.name AS category_name, "
+            "fr.color, fr.location, fr.date_found, fr.public_description, "
+            "fr.private_notes, fr.image_path, fr.status "
+            "FROM found_reports fr "
+            "LEFT JOIN categories c ON fr.category_id = c.id "
+            "ORDER BY fr.id DESC;";
+
+        pqxx::result r = Database::getInstance().executeQuery(query);
+
+        for (const auto& row : r) {
+            int id = row["id"].as<int>();
+            int adminId = row["admin_id"].as<int>();
+            int categoryId = row["category_id"].as<int>();
+            string categoryName = row["category_name"].is_null() ? "" : row["category_name"].as<string>();
+
+            Category cat(categoryId, categoryName);
+
+            reports.emplace_back(
+                id,
+                adminId,
+                cat,
+                row["color"].as<string>(),
+                row["location"].as<string>(),
+                row["date_found"].as<string>(),
+                row["public_description"].as<string>(),
+                row["private_notes"].as<string>(),
+                row["image_path"].as<string>(),
+                row["status"].as<string>()
+            );
+        }
+        return reports;
+    }
 };
-
 
 // PossibleMatch
 class PossibleMatch {
