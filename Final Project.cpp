@@ -638,7 +638,7 @@ public:
 		status = newStatus;
 	}
 
-	bool saveToDb() {
+	bool saveToDb() const {
 		string query = "INSERT INTO possible_matches (lost_report_id, found_report_id, match_score, status) VALUES ("
 			+ to_string(lostReportId) + ", "
 			+ to_string(foundReportId) + ", "
@@ -838,8 +838,10 @@ public:
 				PossibleMatch match(report.getId(), found.getId(), score);
 				if (match.saveToDb()) {
 					NotificationService notifService;
+					
 					string msg = "Match found for your lost report #" + to_string(report.getId()) +
-						" (" + report.getCategory().getName() + ") with score " + to_string(score) + "%!";
+						" with score " + to_string(score) + "%!";
+
 					notifService.sendNotification(report.getUserId(), msg, "match_found");
 				}
 			}
@@ -878,7 +880,7 @@ public:
 
 					NotificationService notifService;
 					string msg = "Match found for your lost report #" + to_string(lost.getId()) +
-						" (" + lost.getCategory().getName() + ") with score " + to_string(score) + "%!";
+						" with score " + to_string(score) + "%!";
 
 					notifService.sendNotification(userId, msg, "match_found");
 				}
@@ -1192,106 +1194,78 @@ public:
 };
 
 
-vector<LostReport> SearchService::searchLostReports(int categoryId, string color, string location) {
+vector<LostReport> SearchService::searchLostReports(int categoryId, string color, string location)
+{
 
+	// Local vector to store and return search results for this request, ensuring a clean state.
+	vector<LostReport> results;
 
-	vector<LostReport>  results;
-	string query =
-		"SELECT * FROM lost_reports "
-		"WHERE category_id = " + to_string(categoryId) +
-		" AND color = '" + color +
-		"' AND location = '" + location + "'";
+	string query = "SELECT * FROM lost_reports WHERE category_id = " + to_string(categoryId);
+	if (color != "")    query += " AND color ILIKE '" + color + "'";
+	if (location != "") query += " AND location ILIKE '" + location + "'";
 
-	pqxx::result r = Database::getInstance().executeQuery(query);
+	try
+	{
+		pqxx::result r = Database::getInstance().executeQuery(query);
 
-	for (const auto& row : r) {
-		int id = row["id"].as<int>();
-		int userId = row["user_id"].as<int>();
+		for (const auto& row : r)
+		{
+			Category category(row["category_id"].as<int>(), "");
 
-		int rowCategoryId = row["category_id"].as<int>();
-		string rowColor = row["color"].as<string>();
-		string rowLocation = row["location"].as<string>();
-
-		string date = row["date_lost"].as<string>();
-		string privateDescription = row["private_description"].as<string>();
-		string imagePath = row["image_path"].as<string>();
-		string status = row["status"].as<string>();
-
-
-		Category category(rowCategoryId, " ");
-
-
-		LostReport report(
-			id,
-			userId,
-			category,
-			rowColor,
-			rowLocation,
-			date,
-			privateDescription,
-			imagePath,
-			status
-		);
-
-		results.push_back(report);
-
-
+			LostReport report(
+				row["id"].as<int>(),
+				row["user_id"].as<int>(),
+				category,
+				row["color"].as<string>(),
+				row["location"].as<string>(),
+				row["date_lost"].as<string>(),
+				row["private_description"].as<string>(),
+				row["image_path"].as<string>(),
+				row["status"].as<string>()
+			);
+			results.push_back(report);
+		}
 	}
+	catch (const exception&) {}
+
 	return results;
-
-
-
 }
 
 
-vector<FoundReport>  SearchService::searchFoundReports(int categoryId, string color, string location) {
-
+vector<FoundReport> SearchService::searchFoundReports(int categoryId, string color, string location)
+{
 	vector<FoundReport> results;
 
-	string query =
-		"SELECT * FROM found_reports "
-		"WHERE category_id = " + to_string(categoryId) +
-		" AND color = '" + color +
-		"' AND location_found = '" + location + "'";
+	string query = "SELECT * FROM found_reports WHERE category_id = " + to_string(categoryId);
+	if (color != "")    query += " AND color ILIKE '" + color + "'";
+	if (location != "") query += " AND location_found ILIKE '" + location + "'";
 
-	pqxx::result r = Database::getInstance().executeQuery(query);
+	try
+	{
+		pqxx::result r = Database::getInstance().executeQuery(query);
 
-	for (const auto& row : r) {
+		for (const auto& row : r)
+		{
+			Category category(row["category_id"].as<int>(), "");
 
-		int id = row["id"].as<int>();
-		int adminId = row["admin_id"].as<int>();
-
-		int rowCategoryId = row["category_id"].as<int>();
-		string rowColor = row["color"].as<string>();
-		string rowLocation = row["location_found"].as<string>();
-
-		string date = row["date_found"].as<string>();
-		string publicDescription = row["public_description"].as<string>();
-		string privateNotes = row["private_notes"].as<string>();
-		string imagePath = row["image_path"].as<string>();
-		string status = row["status"].as<string>();
-
-		Category category(rowCategoryId, " ");
-
-		FoundReport report(
-			id,
-			adminId,
-			category,
-			rowColor,
-			rowLocation,
-			date,
-			publicDescription,
-			privateNotes,
-			imagePath,
-			status
-		);
-		results.push_back(report);
-
+			FoundReport report(
+				row["id"].as<int>(),
+				row["admin_id"].as<int>(),
+				category,
+				row["color"].as<string>(),
+				row["location_found"].as<string>(),
+				row["date_found"].as<string>(),
+				row["public_description"].as<string>(),
+				row["private_notes"].as<string>(),
+				row["image_path"].as<string>(),
+				row["status"].as<string>()
+			);
+			results.push_back(report);
+		}
 	}
+	catch (const exception&) {}
+
 	return results;
-
-
-
 }
 
 
@@ -1369,7 +1343,7 @@ LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
 // RENDER FUNCTIONS 
 
-void RenderNotificationsTab(int currentUserId)
+static void RenderNotificationsTab(int currentUserId)
 {
 	NotificationService notificationService;
 	vector<Notification> notifications = notificationService.getUserNotifications(currentUserId);
@@ -1382,7 +1356,7 @@ void RenderNotificationsTab(int currentUserId)
 	{
 		for (auto& n : notifications)
 		{
-			ImGui::PushID(n.getId());
+			ImGui::PushID(n.getId());    //  PushID  : Sets a unique ID for this item in the loop to prevent UI conflicts between rows
 
 			if (n.getIsRead())
 				ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.6f, 1.0f), "%s", n.getMessage().c_str());
@@ -1408,7 +1382,7 @@ void RenderNotificationsTab(int currentUserId)
 
 
 
-void RenderDashboardTab()
+static void RenderDashboardTab()
 {
 	AdminDashboard dashboard;
 
@@ -1425,51 +1399,138 @@ void RenderDashboardTab()
 
 
 
-void RenderClaimsTab(Admin& admin)
+
+static void RenderClaimsTab(Admin& admin)
 {
-	static int claimId = 0;
+	
+	static string statusMessage = "";
+	static bool isSuccess = false;
 
+	ImGui::Text("Claims Management System");
 	ImGui::Separator();
-	ImGui::Text("Claim Review");
+	ImGui::Spacing();
 
-	ImGui::InputInt("Claim ID", &claimId);
+	
 
-	if (ImGui::Button("Approve"))
+	if (ImGui::CollapsingHeader("Pending Claims", ImGuiTreeNodeFlags_DefaultOpen))   // The section is open by default.
 	{
-		if (admin.approveClaim(claimId))
+		vector<ClaimRow> pendingClaims = admin.viewPendingClaims();
+
+		if (pendingClaims.empty())
 		{
-			ImGui::Text("Claim approved successfully!");
+			ImGui::TextDisabled("No pending claims to review.");
 		}
 		else
 		{
-			ImGui::Text("Failed to approve claim.");
+			for (const auto& claim : pendingClaims)
+			{
+				ImGui::PushID(claim.claimId);    //  PushID  : Sets a unique ID for this item in the loop to prevent UI conflicts between rows.
+
+				ImGui::BulletText("Claim ID: %d | User: %s | Match Score: %d%%",
+					claim.claimId, claim.username.c_str(), claim.matchScore);
+
+				ImGui::Indent();
+				ImGui::TextWrapped("Identifying Details: %s", claim.identifyingDetails.c_str());
+				ImGui::TextWrapped("Lost Description: %s", claim.lostPrivateDescription.c_str());
+				ImGui::TextWrapped("Found Public Desc: %s", claim.foundPublicDescription.c_str());
+
+				
+				if (ImGui::Button("Approve"))
+				{
+					if (admin.approveClaim(claim.claimId)) {
+						statusMessage = "Claim #" + to_string(claim.claimId) + " approved successfully!";
+						isSuccess = true;
+					}
+					else {
+						statusMessage = "Failed to approve claim #" + to_string(claim.claimId);
+						isSuccess = false;
+					}
+				}
+
+				ImGui::SameLine();
+
+				if (ImGui::Button("Reject"))
+				{
+					if (admin.rejectClaim(claim.claimId)) {
+						statusMessage = "Claim #" + to_string(claim.claimId) + " rejected successfully!";
+						isSuccess = true;
+					}
+					else {
+						statusMessage = "Failed to reject claim #" + to_string(claim.claimId);
+						isSuccess = false;
+					}
+				}
+
+				ImGui::Unindent();
+				ImGui::Separator();
+				ImGui::PopID();
+			}
 		}
 	}
 
-	ImGui::SameLine();
+	ImGui::Spacing();
 
-	if (ImGui::Button("Reject"))
+	
+	//   Approved Claims
+	
+	if (ImGui::CollapsingHeader("Approved Claims (Ready for Return)"))
 	{
-		if (admin.rejectClaim(claimId))
+		vector<ClaimRow> approvedClaims = admin.viewApprovedClaims();
+
+		if (approvedClaims.empty())
 		{
-			ImGui::Text("Claim rejected successfully!");
+			ImGui::TextDisabled("No approved claims waiting for pickup.");   //:TextDisabled  لون باهت
 		}
 		else
 		{
-			ImGui::Text("Failed to reject claim.");
+			for (const auto& claim : approvedClaims)
+			{
+				ImGui::PushID(claim.claimId);
+
+				ImGui::Text("Claim ID: %d | User: %s", claim.claimId, claim.username.c_str());
+
+				if (ImGui::Button("Mark as Returned"))
+				{
+					if (admin.markAsReturned(claim.claimId)) {
+						statusMessage = "Item for Claim #" + to_string(claim.claimId) + " marked as returned!";
+						isSuccess = true;
+					}
+					else {
+						statusMessage = "Failed to mark Claim #" + to_string(claim.claimId) + " as returned.";
+						isSuccess = false;
+					}
+				}
+
+				ImGui::Separator();
+				ImGui::PopID();
+			}
+		}
+	}
+
+	
+	// (Success / Failure Message)
+	if (!statusMessage.empty())
+	{
+		ImGui::Spacing();
+		if (isSuccess) {
+			ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), "%s", statusMessage.c_str()); // لون أخضر
+		}
+		else {
+			ImGui::TextColored(ImVec4(1.0f, 0.0f, 0.0f, 1.0f), "%s", statusMessage.c_str()); // لون أحمر
 		}
 	}
 }
 
 
 
+// Fetches available matches for the user's lost items that haven't been claimed yet
 struct MatchRow {
 	int matchId = 0;
 	int score = 0;
 	string category, lostColor, foundColor, foundDesc;
 };
 
-vector<MatchRow> getUserMatches(int userId)
+vector<MatchRow> static getUserMatches(int userId)
 {
 	vector<MatchRow> rows;
 
@@ -1560,7 +1621,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
 
 	// login & sign up
 	bool isLoggedIn = false;
-	User currentUser;                 // المستخدم اللي سجّل دخول
+	User currentUser;              
 	int authMode = 0;                 // 0 = Login ، 1 = signup
 	char authUsername[50] = "";
 	char authPassword[50] = "";
@@ -1584,6 +1645,8 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
 	static bool lostSuccess = false;
 
 	//found report
+	bool isAdmin = false;
+	bool loginAsAdmin = false;
 	int currentAdminId = 1;
 	static int foundCategoryIndex = 0;
 	Admin admin;
@@ -1624,11 +1687,11 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
 		ImGui::NewFrame();
 
 		// --- Application Window UI ---
-		ImGui::SetNextWindowSize(ImVec2(800, 600), ImGuiCond_FirstUseEver); // set the Welcome window size (500x350) on first open only; the user can resize it later
-		ImGui::Begin("Dashboard");
-
-		//login & signup
-		if (!isLoggedIn) {
+		if (!isLoggedIn)
+		{
+			
+			ImGui::SetNextWindowSize(ImVec2(500, 350), ImGuiCond_FirstUseEver);
+			ImGui::Begin("Welcome");
 
 			if (ImGui::Button("Login")) { authMode = 0; authMessage = ""; }
 			ImGui::SameLine();
@@ -1638,44 +1701,63 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
 
 			ImGui::InputText("Username", authUsername, IM_ARRAYSIZE(authUsername));
 			ImGui::InputText("Password", authPassword, IM_ARRAYSIZE(authPassword),
-				ImGuiInputTextFlags_Password);   //بتخلي ال باسورد مش ظاهر 
-
-
+				ImGuiInputTextFlags_Password);
 
 			if (authMode == 1)
 				ImGui::InputText("Email", authEmail, IM_ARRAYSIZE(authEmail));
 
 			if (authMode == 0)
 			{
-				if (ImGui::Button("sign In")) {
+				ImGui::Checkbox("Login as Admin", &loginAsAdmin);
 
-					User u;
-					if (u.login(string(authUsername), string(authPassword)))
+				if (ImGui::Button("sign In"))
+				{
+					if (loginAsAdmin)
 					{
-						currentUser = u;
-						currentUserId = u.getId();
-						isLoggedIn = true;
-						authPassword[0] = '\0';
-						authMessage = "";
+						if (admin.login(string(authUsername), string(authPassword)))
+						{
+							isAdmin = true;
+							currentAdminId = admin.getId();
+							isLoggedIn = true;
+							authPassword[0] = '\0';   //'\0':  Clears the password buffer by setting the first character to null terminator.
+							authMessage = "";
+						}
+						else
+						{
+							authMessage = admin.getLastMessage();
+							authSuccess = false;
+						}
 					}
 					else
 					{
-						authMessage = "Wrong username or password.";
-						authSuccess = false;
+						User u;
+						if (u.login(string(authUsername), string(authPassword)))
+						{
+							currentUser = u;
+							currentUserId = u.getId();
+							isLoggedIn = true;
+							authPassword[0] = '\0';
+							authMessage = "";
+						}
+						else
+						{
+							authMessage = "Wrong username or password.";
+							authSuccess = false;
+						}
 					}
 				}
 			}
-			else {
-
-				if (ImGui::Button("Create Account")) {
-
+			else   //sign up
+			{
+				if (ImGui::Button("Create Account"))
+				{
 					if (strlen(authUsername) == 0 || strlen(authPassword) == 0 || strlen(authEmail) == 0)
 					{
 						authMessage = "Please fill all fields.";
 						authSuccess = false;
 					}
-					else {
-
+					else
+					{
 						User newUser(0, string(authUsername), string(authPassword), string(authEmail));
 
 						if (newUser.registerAccount())
@@ -1691,7 +1773,6 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
 							authMessage = "Registration failed (username or email may already exist).";
 							authSuccess = false;
 						}
-
 					}
 				}
 			}
@@ -1703,43 +1784,60 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
 				else
 					ImGui::TextColored(ImVec4(1.0f, 0.3f, 0.3f, 1.0f), "%s", authMessage.c_str());
 			}
-		}
-		else
 
+			ImGui::End();
+		}
+		else   //Dashboard
 		{
+			
+			ImGui::SetNextWindowSize(ImVec2(800, 600), ImGuiCond_FirstUseEver);
+			ImGui::Begin("Dashboard");
+
+			if (ImGui::Button("Logout"))
+			{
+				if (isAdmin) admin.logout();
+				isLoggedIn = false;
+				isAdmin = false;
+				loginAsAdmin = false;
+				currentPage = 0;
+				authUsername[0] = '\0';
+				authMessage = "";
+
+				claimMatchId = 0;
+				claimDetails[0] = '\0';
+				claimMessage = "";
+				myMatches.clear();
+
+			}
 
 			ImGui::Text("Welcome to the System Dashboard!");
 			ImGui::Separator();
-
 
 			if (ImGui::Button("Dashboard"))
 			{
 				currentPage = 0;
 			}
 
-			if (ImGui::Button("Lost Item")) //DONE
+			if (!isAdmin && ImGui::Button("Lost Item")) 
 			{
 				currentPage = 1;
 			}
-
-			if (ImGui::Button("Found Item"))  //DONE
+			if (isAdmin && ImGui::Button("Found Item"))
 			{
-				currentPage = 2;
+				currentPage = 2; 
+
 			}
-
-			if (ImGui::Button("Search"))   //DONE
-			{
-				currentPage = 3;
+			if (ImGui::Button("Search")) 
+			{ 
+				currentPage = 3; 
 			}
-
-			if (ImGui::Button("Notifications"))   //DONE
+			if (!isAdmin && ImGui::Button("Notifications")) 
 			{
-				currentPage = 4;
+				currentPage = 4; 
 			}
-
-			if (ImGui::Button("Claim Request"))
+			if (ImGui::Button(isAdmin ? "Review Claims" : "Claim Request"))
 			{
-				currentPage = 5;
+				currentPage = 6;
 				myMatches = getUserMatches(currentUserId);
 			}
 
@@ -1749,7 +1847,6 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
 			{
 				RenderDashboardTab();
 			}
-
 
 			if (currentPage == 1)
 			{
@@ -1763,10 +1860,9 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
 				static char lostPrivateDesc[500] = "";
 				static char lostImagePath[200] = "";
 
-
+				// Render category dropdown and convert 0-based UI index to 1-based database category ID.
 				ImGui::Combo("Category", &lostCategoryIndex, categoryNames, IM_ARRAYSIZE(categoryNames));
 				lostCategoryId = lostCategoryIndex + 1;
-
 
 				ImGui::InputText("Color", lostColor, IM_ARRAYSIZE(lostColor));
 				ImGui::InputText("Location", lostLocation, IM_ARRAYSIZE(lostLocation));
@@ -1774,10 +1870,8 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
 				ImGui::InputTextMultiline("Private Description", lostPrivateDesc, IM_ARRAYSIZE(lostPrivateDesc));
 				ImGui::InputText("Image Path (optional)", lostImagePath, IM_ARRAYSIZE(lostImagePath));
 
-
 				if (ImGui::Button("Submit Lost Report"))
 				{
-
 					if (lostCategoryId <= 0 || strlen(lostDate) == 0)
 					{
 						lostMessage = "Please enter a valid Category ID and Date.";
@@ -1785,7 +1879,6 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
 					}
 					else
 					{
-
 						Category category(lostCategoryId, "");
 						LostReport report(
 							0,
@@ -1796,58 +1889,44 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
 							string(lostDate),
 							string(lostPrivateDesc),
 							string(lostImagePath),
-							"lost"                  // status
+							"lost"
 						);
 
 						if (report.saveToDb())
 						{
-							MatchingEngine engine;
-							engine.runMatchForLostReport(report);
+							try
+							{
+								MatchingEngine engine;
+								engine.runMatchForLostReport(report);
+							}
+							catch (const exception&) {}
 
 							lostMessage = "Lost report saved successfully!";
 							lostSuccess = true;
-
 						}
 						else
 						{
 							lostMessage = "Failed to save lost report.";
 							lostSuccess = false;
 						}
+						
 
 					}
-
 				}
 
 				if (!lostMessage.empty())
 				{
 					if (lostSuccess)
-					{
-						ImGui::TextColored(
-							ImVec4(0.3f, 1.0f, 0.3f, 1.0f),
-							"%s",
-							lostMessage.c_str()
-						);
-					}
+						ImGui::TextColored(ImVec4(0.3f, 1.0f, 0.3f, 1.0f), "%s", lostMessage.c_str()); 
 					else
-					{
-						ImGui::TextColored(
-							ImVec4(1.0f, 0.3f, 0.3f, 1.0f),
-							"%s",
-							lostMessage.c_str()
-						);
-					}
+						ImGui::TextColored(ImVec4(1.0f, 0.3f, 0.3f, 1.0f), "%s", lostMessage.c_str());
 				}
 			}
 
-
-
-
-
 			if (currentPage == 2)
 			{
-				ImGui::Separator();  //line
+				ImGui::Separator();
 				ImGui::Text("Report a Found Item");
-
 
 				static int foundCategoryId = 0;
 				static char foundColor[100] = "";
@@ -1855,39 +1934,18 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
 				static char foundDate[20] = "";
 				static char foundPublicDesc[500] = "";
 				static char foundPrivateNotes[500] = "";
-				static char foundImagePath[200] = " ";
-
-
-
+				static char foundImagePath[200] = "";
 
 				ImGui::Combo("Category", &foundCategoryIndex, categoryNames, IM_ARRAYSIZE(categoryNames));
 				foundCategoryId = foundCategoryIndex + 1;
 
 				ImGui::InputText("Color", foundColor, IM_ARRAYSIZE(foundColor));
 				ImGui::InputText("Location_found", foundLocation, IM_ARRAYSIZE(foundLocation));
-				ImGui::InputText("Date (DD-MM-YY)", foundDate, IM_ARRAYSIZE(foundDate));
+				ImGui::InputText("Date (YYYY-MM-DD) ", foundDate, IM_ARRAYSIZE(foundDate));
 
-				ImGui::InputTextMultiline(
-					"Public Description",
-					foundPublicDesc,
-					IM_ARRAYSIZE(foundPublicDesc),
-					ImVec2(400, 70)
-				);
-
-				ImGui::InputTextMultiline(
-					"Private Notes",
-					foundPrivateNotes,
-					IM_ARRAYSIZE(foundPrivateNotes),
-					ImVec2(400, 70)
-				);
-
-				ImGui::InputText(
-					"Image Path (optional)",
-					foundImagePath,
-					IM_ARRAYSIZE(foundImagePath)
-				);
-
-
+				ImGui::InputTextMultiline("Public Description", foundPublicDesc, IM_ARRAYSIZE(foundPublicDesc), ImVec2(400, 70));
+				ImGui::InputTextMultiline("Private Notes", foundPrivateNotes, IM_ARRAYSIZE(foundPrivateNotes), ImVec2(400, 70));
+				ImGui::InputText("Image Path (optional)", foundImagePath, IM_ARRAYSIZE(foundImagePath));
 
 				if (ImGui::Button("Submit Found Report")) {
 
@@ -1897,9 +1955,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
 						foundSuccess = false;
 					}
 					else {
-
 						Category category(foundCategoryId, "");
-
 						FoundReport report(
 							0,
 							currentAdminId,
@@ -1913,226 +1969,187 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
 							"found"
 						);
 
-
 						if (report.saveToDb())
 						{
-
-							MatchingEngine engine;
-							engine.runMatchForFoundReport(report);
+							try
+							{
+								MatchingEngine engine;
+								engine.runMatchForFoundReport(report);
+							}
+							catch (const exception&) {}
 
 							foundMessage = "Found report saved successfully!";
 							foundSuccess = true;
-
 						}
 						else
 						{
 							foundMessage = "Failed to save found report.";
 							foundSuccess = false;
 						}
-
 					}
 				}
 
 				if (!foundMessage.empty())
 				{
 					if (foundSuccess)
-					{
-						ImGui::TextColored(
-							ImVec4(0.3f, 1.0f, 0.3f, 1.0f),
-							"%s",
-							foundMessage.c_str()
-						);
-					}
+						ImGui::TextColored(ImVec4(0.3f, 1.0f, 0.3f, 1.0f), "%s", foundMessage.c_str());
 					else
-					{
-						ImGui::TextColored(
-							ImVec4(1.0f, 0.3f, 0.3f, 1.0f),
-							"%s",
-							foundMessage.c_str()
-						);
-					}
+						ImGui::TextColored(ImVec4(1.0f, 0.3f, 0.3f, 1.0f), "%s", foundMessage.c_str());
 				}
-
-
 			}
 
 			if (currentPage == 3)
 			{
+				
 				ImGui::Separator();
 				ImGui::Text("Search");
-
 
 				static int searchCategoryIndex = 0;
 				ImGui::Combo("Category", &searchCategoryIndex, categoryNames, IM_ARRAYSIZE(categoryNames));
 				searchCategoryId = searchCategoryIndex + 1;
 
-				ImGui::InputText("Color ", searchColor, IM_ARRAYSIZE(searchColor));
+				ImGui::InputText("Color (optional)", searchColor, IM_ARRAYSIZE(searchColor));
+				ImGui::InputText("Location (optional)", searchLocation, IM_ARRAYSIZE(searchLocation));
 
-				ImGui::InputText("Location", searchLocation, IM_ARRAYSIZE(searchLocation));
-
-				if (ImGui::Button("search lost ")) {
-
-
-					SearchService  searchService;
+				if (ImGui::Button("Search Lost"))
+				{
+					SearchService searchService;
+					foundResults.clear();
 					lostResults = searchService.searchLostReports(
-
-						searchCategoryId,
-						string(searchColor),
-						string(searchLocation)
-					);
+						searchCategoryId, string(searchColor), string(searchLocation));
 				}
 
 				ImGui::SameLine();
 
-				if (ImGui::Button("search found ")) {
-
-					SearchService  searchService;
+				if (ImGui::Button("Search Found"))
+				{
+					SearchService searchService;
+					lostResults.clear();
 					foundResults = searchService.searchFoundReports(
-
-						searchCategoryId,
-						string(searchColor),
-						string(searchLocation)
-					);
+						searchCategoryId, string(searchColor), string(searchLocation));
 				}
-
 
 				ImGui::Separator();
+				ImGui::Text("Lost results: %d", (int)lostResults.size());
 
-				if (!lostResults.empty())
+				for (const auto& r : lostResults)
 				{
-					ImGui::Text("Lost Results: %d", (int)lostResults.size());
-					for (const auto& r : lostResults)
-					{
-						ImGui::Text("#%d | Color: %s | Location: %s | Date: %s | Status: %s",
-							r.getId(),
-							r.getColor().c_str(),
-							r.getLocation().c_str(),
-							r.getDate().c_str(),
-							r.getStatus().c_str());
-					}
+					ImGui::Text("#%d | Color: %s | Location: %s | Date: %s | Status: %s",
+						r.getId(),
+						r.getColor().c_str(),
+						r.getLocation().c_str(),
+						r.getDate().c_str(),
+						r.getStatus().c_str());
 				}
 
+				ImGui::Separator();
+				ImGui::Text("Found results: %d", (int)foundResults.size());
 
-				if (!foundResults.empty())
+				for (const auto& r : foundResults)
 				{
-					ImGui::Separator();
-					ImGui::Text("Found Results: %d", (int)foundResults.size());
-					for (const auto& r : foundResults)
-					{
-						ImGui::Text("#%d | Color: %s | Date: %s | Status: %s",
-							r.getId(),
-							r.getColor().c_str(),
-							r.getDate().c_str(),
-							r.getStatus().c_str());
-					}
+					ImGui::Text("#%d | Color: %s | Date: %s | Status: %s",
+						r.getId(),
+						r.getColor().c_str(),
+						r.getDate().c_str(),
+						r.getStatus().c_str());
 				}
 			}
-
-
-
-
 
 			if (currentPage == 4)
 			{
-
 				RenderNotificationsTab(currentUserId);
-
 			}
 
-			if (currentPage == 5)
+			if (currentPage == 6)
 			{
-				ImGui::Separator();
-				ImGui::Text("Claim Request");
-
-				ImGui::Text("Your possible matches:");
-
-				if (myMatches.empty())
+				if (admin.isLoggedIn())
 				{
-					ImGui::Text("No matches yet.");
+					RenderClaimsTab(admin);
 				}
-
-				for (const auto& m : myMatches)
+				else
 				{
-					ImGui::PushID(m.matchId);
+					ImGui::Text("Your possible matches:");
 
-					ImGui::Text("Match #%d | %s | your color: %s | found color: %s | score: %d%%",
-						m.matchId, m.category.c_str(), m.lostColor.c_str(),
-						m.foundColor.c_str(), m.score);
-					ImGui::Text("Found item: %s", m.foundDesc.c_str());
-
-					if (ImGui::Button("Select this match"))
+					if (myMatches.empty())
 					{
-						claimMatchId = m.matchId;
+						ImGui::TextDisabled("No matches yet.");
 					}
 
-					ImGui::Separator();
-					ImGui::PopID();
-				}
-
-				ImGui::Text("Selected Match ID: %d", claimMatchId);
-
-				ImGui::InputTextMultiline(
-					"Identifying Details",
-					claimDetails,
-					IM_ARRAYSIZE(claimDetails),
-					ImVec2(500, 120));
-
-				if (ImGui::Button("Submit Claim"))
-				{
-					if (claimMatchId <= 0)
+					for (const auto& m : myMatches)
 					{
-						claimMessage = "Please select a match first.";
-						claimSuccess = false;
-					}
-					else if (claimDetails[0] == '\0')
-					{
-						claimMessage = "Please describe why the item is yours.";
-						claimSuccess = false;
-					}
-					else
-					{
-						ClaimRequest claim(currentUserId, claimMatchId, string(claimDetails));
+						ImGui::PushID(m.matchId);
 
-						if (claim.submitClaim())
+						ImGui::Text("Match #%d | %s | your color: %s | found color: %s | score: %d%%",
+							m.matchId, m.category.c_str(), m.lostColor.c_str(),
+							m.foundColor.c_str(), m.score);
+						ImGui::Text("Found item: %s", m.foundDesc.c_str());
+
+						if (ImGui::Button("Select this match"))
 						{
-							claimMessage = "Claim submitted successfully!";
-							claimSuccess = true;
-							claimMatchId = 0;
-							claimDetails[0] = '\0';
-							myMatches = getUserMatches(currentUserId);   // نحدّث القايمة
+							claimMatchId = m.matchId;
+						}
+
+						ImGui::Separator();
+						ImGui::PopID();
+					}
+
+					ImGui::Spacing();
+					ImGui::Text("Selected Match ID: %d", claimMatchId);
+
+					ImGui::InputTextMultiline(
+						"Identifying Details",
+						claimDetails,
+						IM_ARRAYSIZE(claimDetails),
+						ImVec2(500, 120));
+
+					if (ImGui::Button("Submit Claim"))
+					{
+						if (claimMatchId <= 0)
+						{
+							claimMessage = "Please select a match first.";
+							claimSuccess = false;
+						}
+						else if (claimDetails[0] == '\0')
+						{
+							claimMessage = "Please describe why the item is yours.";
+							claimSuccess = false;
 						}
 						else
 						{
-							claimMessage = "Failed to submit claim.";
-							claimSuccess = false;
+							ClaimRequest claim(currentUserId, claimMatchId, string(claimDetails));
+
+							if (claim.submitClaim())
+							{
+								claimMessage = "Claim submitted successfully!";
+								claimSuccess = true;
+								claimMatchId = 0;
+								claimDetails[0] = '\0';
+								myMatches = getUserMatches(currentUserId);
+							}
+							else
+							{
+								claimMessage = "Failed to submit claim.";
+								claimSuccess = false;
+							}
 						}
 					}
-				}   // قفلة الزرار
+					
 
-				// برّه الزرار، عشان الرسالة تفضل ظاهرة
-				if (!claimMessage.empty())
-				{
-					if (claimSuccess)
-						ImGui::TextColored(ImVec4(0.3f, 1.0f, 0.3f, 1.0f), "%s", claimMessage.c_str());
-					else
-						ImGui::TextColored(ImVec4(1.0f, 0.3f, 0.3f, 1.0f), "%s", claimMessage.c_str());
+					if (!claimMessage.empty())
+					{
+						ImGui::Spacing();
+						if (claimSuccess)
+							ImGui::TextColored(ImVec4(0.3f, 1.0f, 0.3f, 1.0f), "%s", claimMessage.c_str());
+						else
+							ImGui::TextColored(ImVec4(1.0f, 0.3f, 0.3f, 1.0f), "%s", claimMessage.c_str());
+					}
 				}
 			}
 
-			if (currentPage == 6) {
-
-
-				RenderClaimsTab(admin);
-			}
-
-
-			
+			ImGui::End(); 
 		}
 
-
-		ImGui::End();
-
-		// Rendering
+		
 		ImGui::Render();
 		const float clear_color_with_alpha[4] = { 0.45f, 0.55f, 0.60f, 1.00f };
 		g_pd3dDeviceContext->OMSetRenderTargets(1, &g_mainRenderTargetView, nullptr);
@@ -2140,9 +2157,9 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
 		ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
 
 		g_pSwapChain->Present(1, 0);
-	}
-		
-	
+
+	} 
+
 	// Cleanup
 	ImGui_ImplDX11_Shutdown();
 	ImGui_ImplWin32_Shutdown();
@@ -2153,6 +2170,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
 	::UnregisterClassW(wc.lpszClassName, wc.hInstance);
 
 	return 0;
+
 }
 
 // Helper functions for DirectX 11

@@ -8,11 +8,34 @@ Database::Database()
     std::string password;
 
     std::getline(file, password);
+    
 
-    conn = std::make_unique<pqxx::connection>(
-        "dbname=Lost&Found_MS user=postgres password=" + password +
-        " host=127.0.0.1 port=5432"
-    );
+    if (!file.is_open())
+    {
+        MessageBoxA(nullptr,
+            "Cannot find db_config.txt in the working directory.",
+            "Configuration Error", MB_OK | MB_ICONERROR);
+        throw std::runtime_error("Cannot open db_config.txt");
+    }
+
+    std::getline(file, password);
+
+    try
+    {
+        conn = std::make_unique<pqxx::connection>(
+            "dbname=Lost&Found_MS user=postgres password=" + password +
+            " host=127.0.0.1 port=5432"
+        );
+
+        if (!conn->is_open())
+            throw std::runtime_error("Connection is not open");
+    }
+    catch (const std::exception& e)
+    {
+        MessageBoxA(nullptr, e.what(),
+            "PostgreSQL Connection Error", MB_OK | MB_ICONERROR);
+        throw;
+    }
 }
 
 
