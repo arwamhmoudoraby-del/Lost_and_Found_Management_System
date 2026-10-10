@@ -1,6 +1,8 @@
 #include "Database.h"
 #include <Windows.h>
 #include <fstream>
+//we used Singleton Pattern
+// Singleton Pattern: Ensures a single database connection instance is shared globally to optimize resources.
 
 Database::Database()
 {
@@ -30,6 +32,7 @@ Database::Database()
         if (!conn->is_open())
             throw std::runtime_error("Connection is not open");
     }
+
     catch (const std::exception& e)
     {
         MessageBoxA(nullptr, e.what(),
